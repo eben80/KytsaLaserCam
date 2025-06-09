@@ -1,0 +1,21 @@
+# PlatformIO build artifacts
+.pio/
+.vscode/*.log
+.vscode/*.code-workspace
+**/.DS_Store
+**/*.pyc
+**/*.o
+**/*.elf
+**/*.bin
+**/*.hex
+
+# VS Code specific files
+.vscode/c_cpp_properties.json # Often generated, can be ignored
+.vscode/tasks.json          # Often generated, can be ignored
+.vscode/launch.json         # Often generated, can be ignored
+
+# PHP specific
+vendor/  # If you use Composer to manage PHP dependencies
+.env     # If you use environment variables for configuration
+*.log
+*.sql
