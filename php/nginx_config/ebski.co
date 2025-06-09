@@ -1,0 +1,176 @@
+# You may add here your
+# server {
+#	...
+# }
+# statements for each of your virtual hosts to this file
+
+##
+# You should look at the following URL's in order to grasp a solid understanding
+# of Nginx configuration files in order to fully unleash the power of Nginx.
+# http://wiki.nginx.org/Pitfalls
+# http://wiki.nginx.org/QuickStart
+# http://wiki.nginx.org/Configuration
+#
+# Generally, you will want to move this file somewhere, and start with a clean
+# file but keep this around for reference. Or just disable in sites-enabled.
+#
+# Please see /usr/share/doc/nginx-doc/examples/ for more detailed examples.
+##
+
+server {
+    if ($host = ebski.co) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+    if ($host = www.ebski.co) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+
+	listen 80;
+	# listen [::]:80 ipv6only=on;
+
+	root /var/www/ebski.co/html;
+	index index.php;
+
+	# Make site accessible from http://localhost/
+	server_name ebski.co www.ebski.co;
+	return 301 https://$server_name$request_uri;
+
+	location / {
+		# First attempt to serve request as file, then
+		# as directory, then fall back to displaying a 404.
+		try_files $uri $uri/ =404;
+		# Uncomment to enable naxsi on this location
+		# include /etc/nginx/naxsi.rules
+	}
+	
+	location ~*  \.(jpg|jpeg|png|gif|ico|css|js)$ {
+        expires 365d;
+  }
+
+	error_page 404 /404.html;
+	error_page 500 502 503 504 /50x.html;
+	location = /50x.html {
+		root /usr/share/nginx/html;
+	}
+
+	location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+	}
+
+	# deny access to .htaccess files, if Apache's document root
+	# concurs with nginx's one
+	#
+	#location ~ /\.ht {
+	#	deny all;
+	#}
+
+
+
+
+}
+
+
+# another virtual host using mix of IP-, name-, and port-based configuration
+#
+#server {
+#	listen 8000;
+#	listen somename:8080;
+#	server_name somename alias another.alias;
+#	root html;
+#	index index.html index.htm;
+#
+#	location / {
+#		try_files $uri $uri/ =404;
+#	}
+#}
+
+
+# HTTPS server
+#
+server {
+        listen 443 ssl http2;
+        server_name ebski.co www.ebski.co;
+
+	error_log /var/www/ebski.co/error.log;
+	access_log /var/www/ebski.co/access.log;
+        root /var/www/ebski.co/html;
+        index index.php;
+
+#    include snippets/ssl-ebski.co.conf;
+#    include snippets/ssl-params.conf;
+#	include global/restrictions.conf;
+#	include global/wordpress.conf;
+
+
+        location / {
+                # First attempt to serve request as file, then
+                # as directory, then fall back to displaying a 404.
+                # try_files $uri $uri/ =404;
+		try_files $uri $uri/ /index.php?$args;
+                # Uncomment to enable naxsi on this location
+                # include /etc/nginx/naxsi.rules
+
+        }
+
+    location = /receive {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock; # Adjust PHP-FPM version
+        fastcgi_param SCRIPT_FILENAME $document_root/mjpeg_server.php; # Directly point to the script
+        # The SCRIPT_NAME will be /receive, and the PHP script will get it as $_SERVER['REQUEST_URI']
+        fastcgi_param REQUEST_URI /receive; # Explicitly set REQUEST_URI if needed, though $fastcgi_script_name might pass it
+	    # Disable buffering for streaming
+    proxy_buffering off;
+    proxy_http_version 1.1; # Often good for streaming
+    proxy_set_header Connection ""; # Clear connection header if needed
+	access_log off;
+    # Or for fastcgi (more relevant here since it's PHP-FPM):
+    fastcgi_buffering off;
+    fastcgi_no_cache 1; # Don't cache responses
+    fastcgi_keep_conn on; # Keep connection open
+    }
+
+    location = /stream {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock; # Adjust PHP-FPM version
+        fastcgi_param SCRIPT_FILENAME $document_root/mjpeg_server.php; # Directly point to the script
+        fastcgi_param REQUEST_URI /stream; # Explicitly set REQUEST_URI if needed
+    # Disable buffering for streaming
+    proxy_buffering off;
+    proxy_http_version 1.1; # Often good for streaming
+    proxy_set_header Connection ""; # Clear connection header if needed
+# access_log off;
+    # Or for fastcgi (more relevant here since it's PHP-FPM):
+    fastcgi_buffering off;
+    fastcgi_no_cache 1; # Don't cache responses
+    fastcgi_keep_conn on; # Keep connection open
+    }
+
+    		location ~*  \.(jpg|jpeg|png|gif|ico|css|js|mp4)$ {
+        expires 365d;
+    		}
+
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+                root /usr/share/nginx/html;
+        }
+
+        location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        }
+
+        location ~ /.well-known {
+                allow all;
+        }
+    ssl_certificate /etc/letsencrypt/live/ebski.co/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/ebski.co/privkey.pem; # managed by Certbot
+
+
+
+}
+
