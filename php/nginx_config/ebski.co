@@ -105,6 +105,17 @@ server {
 #	include global/restrictions.conf;
 #	include global/wordpress.conf;
 
+        location ^~ /kytsa/ {
+            alias /var/www/ebski.co/kytsa_web_interface/; # Note the trailing slash on alias
+            index index.html;
+            try_files $uri $uri/ /kytsa/index.html;
+
+            # Optional: Add specific caching rules for assets within /kytsa/ if needed
+            # location ~* ^/kytsa/(.+\.(jpg|jpeg|png|gif|ico|css|js|mp4))$ {
+            #    expires 365d;
+            #    add_header Cache-Control "public";
+            # }
+        }
 
         location / {
                 # First attempt to serve request as file, then

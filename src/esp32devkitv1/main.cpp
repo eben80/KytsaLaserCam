@@ -152,11 +152,12 @@ unsigned long webSocketLastReconnectAttempt = 0;
 const unsigned long webSocketReconnectInterval = 5000; // Try to reconnect every 5 seconds
 /** @brief Unique identifier for this ESP32 device, typically derived from its MAC address. */
 String deviceId = ""; // Will be set to ESP32 Chip ID
+// Define WebSocket server details
 /** @brief Hostname or IP address of the WebSocket server. */
 const char* wsHost = "ebski.co";
-/** @brief Port number for the WebSocket server. */
-const uint16_t wsPort = 80;
-/** @brief Path for the WebSocket endpoint on the server. */
+/** @brief Port number for the WebSocket server. WebSocket Secure (WSS) port. */
+const uint16_t wsPort = 443;
+/** @brief Path for the WebSocket endpoint on the server. (e.g., wss://ebski.co/ws) */
 const char* wsPath = "/ws";
 
 void RTC_IRAM_ATTR esp_wake_deep_sleep() {
@@ -502,10 +503,12 @@ showBongoCat();
   });
   ArduinoOTA.begin();
 
-  // webSocket.begin(wsHost, wsPort, wsPath, "ws"); // For unencrypted WebSocket
-  // For WSS (SSL), you might need to specify fingerprints or use setCACert
-  // For now, assuming Nginx handles SSL termination and proxies to ws:// internally
-  webSocket.begin(wsHost, wsPort, wsPath);
+  // Connect to WSS (WebSocket Secure) server.
+  // For production systems with public CAs (like Let's Encrypt), this should work.
+  // If connection issues occur with SSL, you might need to provide a root CA certificate
+  // or a fingerprint, e.g., webSocket.beginSSL(wsHost, wsPort, wsPath, "/path_to_ca_cert_on_fs", "fingerprint");
+  // However, for many common CAs, the ESP32's underlying stack may handle it.
+  webSocket.beginSSL(wsHost, wsPort, wsPath);
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000); // Already set via const but can be set here too
   // Optional: for SSL, if your server uses a self-signed cert or you want to pin.

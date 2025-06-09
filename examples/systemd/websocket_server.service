@@ -1,0 +1,36 @@
+[Unit]
+Description=PHP WebSocket Server for Kytsa Project
+Documentation=file:///PATH_TO_YOUR_CLONED_REPO/DEPLOY_GUIDE.md
+After=network.target redis-server.service # Assuming Redis is also managed by systemd
+
+[Service]
+# User and Group that will run the WebSocket server
+# Ensure this user has read/execute access to the PHP project and write access to any log/pid files if configured.
+# Using www-data is common if Nginx also runs as www-data and owns the files,
+# but you might want a dedicated user for security.
+User=www-data
+Group=www-data
+
+# Path to the PHP backend directory
+WorkingDirectory=/var/www/ebski.co/php_backend/
+
+# Command to start the WebSocket server
+# Ensure /usr/bin/php is the correct path to your PHP CLI executable
+ExecStart=/usr/bin/php /var/www/ebski.co/php_backend/bin/server.php
+
+# Restart policy
+Restart=always
+RestartSec=5         # Time to wait before attempting restart
+
+# Logging
+# Output will be directed to syslog by default if not specified otherwise,
+# or use StandardOutput=journal and StandardError=journal for systemd journal.
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=php-kytsa-websocket
+
+# Environment variables (if needed by your script, though not currently used)
+# Environment="APP_ENV=production"
+
+[Install]
+WantedBy=multi-user.target
