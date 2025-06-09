@@ -28,7 +28,8 @@ HTTPClient http;
 bool httpConnected = false;
 
 // --- NEW GLOBAL SETTINGS & NVS KEYS ---
-String serverURLReceive = "https://www.domain.co/receive"; // Now a String to be modifiable
+/** @brief Target URL for posting JPEG frames. Loaded from NVS or default. */
+String serverURLReceive = "https://www.ebski.co/receive"; // Now a String to be modifiable
 const char* SERVER_URL_KEY = "server_url"; // NVS key for server URL
 
 framesize_t currentFrameSize = FRAMESIZE_VGA; // Default resolution
@@ -82,6 +83,22 @@ String framesizeToString(framesize_t fs) {
   }
 }
 
+/**
+ * @brief Connects the ESP32-CAM to the configured Wi-Fi network.
+ *
+ * Uses the SSID and password currently stored in the WiFi global object
+ * (which should be set by `WiFi.begin()` prior to calling this).
+ * Attempts to connect for a limited number of retries (approx. 15 seconds).
+ * After successful connection, it prints the IP address.
+ * If `isNewConnection` is true (meaning credentials were just provided),
+ * it sends the IP address back over the primary serial port.
+ * If connection fails and it's not a new connection attempt, it sends
+ * "ERROR:WIFI_CONNECT_FAILED" over serial.
+ *
+ * @param isNewConnection True if this connection attempt is with newly provided credentials,
+ *                        false if attempting with saved/existing credentials.
+ * @return True if connection is successful, false otherwise.
+ */
 bool connectToWiFi(bool isNewConnection = false) {
   Serial.print("Attempting to connect to SSID: ");
   Serial.println(WiFi.SSID());
@@ -118,7 +135,18 @@ bool connectToWiFi(bool isNewConnection = false) {
   }
 }
 
-// --- setupCamera now takes parameters ---
+/**
+ * @brief Initializes or reinitializes the camera with specified settings.
+ *
+ * Configures the camera pins, pixel format, frame size, and JPEG quality.
+ * It handles PSRAM availability by adjusting framebuffer count and potentially
+ * overriding resolution if PSRAM is not found.
+ * If the camera was previously initialized, it deinitializes it first.
+ * Halts execution if camera initialization fails.
+ *
+ * @param frame_size The desired framesize_t value for image resolution.
+ * @param jpeg_quality The desired JPEG quality (0-63, lower is better, 10-20 is a good range).
+ */
 void setupCamera(framesize_t frame_size, int jpeg_quality) {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
 
@@ -176,6 +204,21 @@ void setupCamera(framesize_t frame_size, int jpeg_quality) {
   }
 }
 
+/**
+ * @brief Captures a frame from the camera and sends it via HTTP POST.
+ *
+ * This function performs the following steps:
+ * 1. Captures a frame buffer from the camera using `esp_camera_fb_get()`.
+ * 2. If capture fails or the frame is empty, it returns early.
+ * 3. Manages the HTTP client connection:
+ *    - Initializes `HTTPClient` and sets headers on the first call or if disconnected.
+ *    - Reuses the existing connection if `http.connected()` is true.
+ * 4. Sends the captured frame (JPEG data) via HTTP POST to `serverURLReceive`.
+ * 5. Handles HTTP response codes:
+ *    - If successful (HTTP_CODE_OK), prepares for the next frame.
+ *    - If failed, prints an error and closes the HTTP connection to force re-establishment.
+ * 6. Returns the frame buffer to the camera using `esp_camera_fb_return()`.
+ */
 void captureAndSendFrameToAWS() {
   unsigned long totalFunctionStart = millis();
 
@@ -233,6 +276,20 @@ void captureAndSendFrameToAWS() {
   // Serial.printf("  [CAM] Total captureAndSendFrameToAWS() time: %lu ms\n", totalFunctionEnd - totalFunctionStart); // Optional log
 }
 
+/**
+ * @brief Initializes the ESP32-CAM.
+ *
+ * This function performs the following actions:
+ * - Initializes serial communication.
+ * - Sets up GPIO pins for LEDs.
+ * - Loads saved Wi-Fi credentials, camera settings (resolution, quality), and the target server URL from NVS (Preferences).
+ * - If settings are not found in NVS, it uses predefined default values.
+ * - Initializes the camera with the loaded or default settings.
+ * - Initializes the Watchdog Timer.
+ * - Configures the HTTP client for insecure connections and sets timeouts.
+ * - Attempts to connect to the saved Wi-Fi network if credentials exist.
+ * - Sets the initial streaming state based on the value loaded from NVS.
+ */
 void setup() {
   Serial.begin(115200);
   Serial.setDebugOutput(false);
@@ -250,7 +307,7 @@ void setup() {
   // --- Load persisted camera settings and URL ---
   currentFrameSize = (framesize_t)preferences.getUChar(RESOLUTION_KEY, FRAMESIZE_VGA); // Default to VGA
   currentJpegQuality = preferences.getInt(QUALITY_KEY, 15); // Default to 15
-  serverURLReceive = preferences.getString(SERVER_URL_KEY, "https://www.domain.co/receive"); // Default URL
+  serverURLReceive = preferences.getString(SERVER_URL_KEY, "https://www.ebski.co/receive"); // Default URL
   // --- END Load persisted settings ---
 
   preferences.end();
@@ -286,6 +343,27 @@ void setup() {
   }
 }
 
+/**
+ * @brief Main loop for the ESP32-CAM.
+ *
+ * This function performs the following actions repeatedly:
+ * - Resets the Watchdog Timer.
+ * - Checks for incoming serial commands at a defined interval (`commandCheckInterval`).
+ * - Processes recognized commands:
+ *   - `WIFI_CREDENTIALS`: Receives and saves new Wi-Fi SSID and password, then attempts to connect.
+ *   - `START_STREAM`: Activates video streaming if Wi-Fi is connected. Persists this state.
+ *   - `STOP_STREAM`: Deactivates video streaming. Persists this state and closes HTTP connection if active.
+ *   - `REQUEST_IP`: Sends the current IP address back over serial if connected.
+ *   - `LED_ON`/`LED_OFF`: Controls the main flash LED.
+ *   - `STATUS_LED_ON`/`STATUS_LED_OFF`: Controls the smaller status LED.
+ *   - `SET_RESOLUTION`: Receives a new resolution string, updates camera settings, and saves to NVS.
+ *   - `SET_QUALITY`: Receives a new JPEG quality value, updates camera settings, and saves to NVS.
+ *   - `SET_URL`: Receives a new server URL, updates the target URL, and saves to NVS.
+ *   - `GET_SETTINGS`: Prints current camera and network settings to serial.
+ * - If streaming is active and Wi-Fi is connected, it calls `captureAndSendFrameToAWS()`.
+ * - If streaming is active but Wi-Fi is disconnected, it stops streaming.
+ * - If not streaming, it introduces a delay to prevent busy-looping.
+ */
 void loop() {
   esp_task_wdt_reset();
 

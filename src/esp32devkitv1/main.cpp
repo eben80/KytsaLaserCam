@@ -15,32 +15,51 @@
 #include "bongoCat.h"
 // NTP Client
 #include <NTPClient.h>
+#include <WebSocketsClient.h>
+#include <ArduinoJson.h>
 
 
 Preferences preferences;
 
 // NTP Settings
+/** @brief UDP client for NTP communication. */
 WiFiUDP ntpUDP;
+/** @brief NTP client instance for time synchronization. */
 NTPClient timeClient(ntpUDP);
+/** @brief Timestamp of the last successful NTP update. */
 unsigned long lastNTPUpdateTime = 0;
+/** @brief Interval in milliseconds for updating time via NTP. */
 long ntpUpdateInterval = 60 * 60 * 1000; // Update every hour
+/** @brief Timezone offset in hours from UTC. */
 int timeZoneOffset = 2; // Default to CEST (UTC+2) - Changed to int
+/** @brief Flag indicating if random servo motion is currently manually activated. */
 bool randomMotionActive = false; // Toggled by the web button
+/** @brief Flag indicating if an active scheduled movement has been temporarily overridden (e.g., by manual stop). */
 bool scheduledMovementOverridden = false; // To temporarily stop scheduled movement
+/** @brief Flag indicating if a scheduled movement is currently active based on NTP time and configured slots. */
 bool isScheduledMovementActive = false; // Tracks if the schedule is currently active
+/** @brief Flag indicating if the device is currently in a configuration mode (e.g., being adjusted via old HTTP interface, less relevant with WebSocket). */
 bool inConfiguration = false; // Flag to indicate if in configuration mode
+/** @brief String storing the start time of the currently active or next scheduled movement. */
 String currentScheduleStartTime = "";
+/** @brief String storing the stop time of the currently active or next scheduled movement. */
 String currentScheduleStopTime = "";
 
 // Define the serial port to use (adjust if needed)
+/** @brief HardwareSerial instance used for communication with the ESP32CAM. */
 HardwareSerial& serialPort = Serial2; // Use Serial2 (RX2, TX2)
 
+/** @brief Flag indicating if WiFi was connected via WiFiManager's Access Point mode. */
 bool wifiConnectedAP = false;
+/** @brief SSID of the currently connected Wi-Fi network. */
 String staSSID;
+/** @brief Password for the currently connected Wi-Fi network. */
 String staPassword;
+/** @brief IP address of the connected ESP32CAM, received over serial. */
 String esp32CamIP = "";
+/** @brief Flag indicating if communication with the ESP32CAM has been established. */
 bool esp32CamConnected = false;
-// Add this global variable to track streaming state
+/** @brief Flag indicating if the ESP32CAM is currently streaming video. */
 bool streaming = false;
 
 
@@ -88,8 +107,6 @@ int numTimeSlots;
 
 WiFiManager wm;
 
-WiFiServer server(80);
-
 String header;
 String valueStringX = String(90);
 String valueStringY = String(90);
@@ -108,17 +125,39 @@ unsigned long lastMovementTime = 0;
 unsigned long movementInterval = 1000;  // Default to 1 second between movements - initialized
 
 // Movement tracking
+/** @brief Structure to manage smooth servo movement. */
 struct ServoMovement {
+  /** @brief Starting position of the servo for the current movement. */
   int startPos;
   int targetPos;
   unsigned long startTime;
   unsigned long duration;
+  /** @brief Flag indicating if the servo is currently executing a movement. */
   bool isMoving;
 };
 
+/** @brief Tracks the current movement state for servo X. */
 ServoMovement movementX = {0, 0, 0, 0, false}; // Servo X movement tracking
+/** @brief Tracks the current movement state for servo Y. */
 ServoMovement movementY = {0, 0, 0, 0, false}; // Servo Y movement tracking
 
+// WebSocket Global Variables
+/** @brief Instance of the WebSocket client used for communication with the server. */
+WebSocketsClient webSocket;
+/** @brief Flag indicating the current connection status of the WebSocket. True if connected, false otherwise. */
+bool webSocketConnected = false;
+/** @brief Timestamp of the last attempt to reconnect the WebSocket. Used to manage reconnection intervals. */
+unsigned long webSocketLastReconnectAttempt = 0;
+/** @brief Interval in milliseconds between WebSocket reconnection attempts. */
+const unsigned long webSocketReconnectInterval = 5000; // Try to reconnect every 5 seconds
+/** @brief Unique identifier for this ESP32 device, typically derived from its MAC address. */
+String deviceId = ""; // Will be set to ESP32 Chip ID
+/** @brief Hostname or IP address of the WebSocket server. */
+const char* wsHost = "ebski.co";
+/** @brief Port number for the WebSocket server. */
+const uint16_t wsPort = 80;
+/** @brief Path for the WebSocket endpoint on the server. */
+const char* wsPath = "/ws";
 
 void RTC_IRAM_ATTR esp_wake_deep_sleep() {
   esp_default_wake_deep_sleep();
@@ -126,6 +165,122 @@ void RTC_IRAM_ATTR esp_wake_deep_sleep() {
   relayActive = true;
   digitalWrite(outputPin, HIGH);
   digitalWrite(relayPin, HIGH);
+}
+
+/**
+ * @brief Generates a unique device ID from the ESP32's MAC address.
+ * @return A String representing the unique chip ID.
+ */
+String getChipId() {
+    uint64_t chipid = ESP.getEfuseMac();
+    char chipid_str[17];
+    snprintf(chipid_str, sizeof(chipid_str), "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
+    return String(chipid_str);
+}
+
+/**
+ * @brief Handles events from the WebSocket client.
+ *
+ * This function is called by the WebSocketsClient library when various events occur,
+ * such as connection, disconnection, or when a message is received.
+ *
+ * @param type The type of WebSocket event that occurred.
+ * @param payload A pointer to the data payload associated with the event (if any).
+ * @param length The length of the payload.
+ */
+void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
+    switch(type) {
+        case WStype_DISCONNECTED:
+            Serial.printf("[WSc] Disconnected!\n");
+            webSocketConnected = false;
+            break;
+        case WStype_CONNECTED:
+            Serial.printf("[WSc] Connected to url: %s\n", (char*)payload);
+            webSocketConnected = true;
+            // Send pairing message
+            {
+                StaticJsonDocument<200> doc;
+                doc["type"] = "pairing";
+                doc["deviceId"] = deviceId;
+                String output;
+                serializeJson(doc, output);
+                webSocket.sendTXT(output);
+                Serial.println("Sent pairing message: " + output);
+            }
+            break;
+        case WStype_TEXT:
+            Serial.printf("[WSc] get text: %s\n", (char*)payload);
+            // Parse JSON command from server
+            {
+                StaticJsonDocument<256> doc; // Adjust size as needed
+                DeserializationError error = deserializeJson(doc, payload, length);
+                if (error) {
+                    Serial.print(F("deserializeJson() failed: "));
+                    Serial.println(error.f_str());
+                    return;
+                }
+
+                const char* command = doc["command"]; // e.g., "servoX", "ledOn"
+
+                if (strcmp(command, "servoX") == 0) {
+                    int val = doc["value"];
+                    myservoX.write(val);
+                    valueStringX = String(val); // Update for display if any part of OLED remains
+                    Serial.printf("Executed servoX: %d\n", val);
+                    // Optionally send back a status update
+                } else if (strcmp(command, "servoY") == 0) {
+                    int val = doc["value"];
+                    myservoY.write(val);
+                    valueStringY = String(val);
+                    Serial.printf("Executed servoY: %d\n", val);
+                } else if (strcmp(command, "LASER_ON") == 0) {
+                    turnLaserOn();
+                    Serial.println("Executed LASER_ON");
+                } else if (strcmp(command, "LASER_OFF") == 0) {
+                    turnLaserOff();
+                    Serial.println("Executed LASER_OFF");
+                } else if (strcmp(command, "RELAY_ON") == 0) {
+                    digitalWrite(relayPin, HIGH);
+                    relayActive = true;
+                    Serial.println("Executed RELAY_ON");
+                } else if (strcmp(command, "RELAY_OFF") == 0) {
+                    digitalWrite(relayPin, LOW);
+                    relayActive = false;
+                    Serial.println("Executed RELAY_OFF");
+                } else if (strcmp(command, "RANDOM_MOTION_TOGGLE") == 0) {
+                    randomMotionActive = !randomMotionActive;
+                     Serial.printf("Random motion toggled: %s\n", randomMotionActive ? "ON" : "OFF");
+                }
+                // Commands for ESP32CAM
+                else if (strcmp(command, "START_STREAM") == 0) {
+                    Serial2.println("START_STREAM");
+                    Serial.println("Sent command to ESP32CAM: START_STREAM");
+                    streaming = true;
+                } else if (strcmp(command, "STOP_STREAM") == 0) {
+                    Serial2.println("STOP_STREAM");
+                    Serial.println("Sent command to ESP32CAM: STOP_STREAM");
+                    streaming = false;
+                } else if (strcmp(command, "CAM_LED_ON") == 0) {
+                    Serial2.println("LED_ON");
+                    Serial.println("Sent command to ESP32CAM: LED_ON");
+                } else if (strcmp(command, "CAM_LED_OFF") == 0) {
+                    Serial2.println("LED_OFF");
+                    Serial.println("Sent command to ESP32CAM: LED_OFF");
+                }
+                // Add more command handlers as needed
+            }
+            break;
+        case WStype_BIN:
+            Serial.printf("[WSc] get binary length: %u\n", length);
+            // hexdump(payload, length); // Example: webSocket.sendBIN(payload, length);
+            break;
+        case WStype_ERROR:
+        case WStype_FRAGMENT_TEXT_START:
+        case WStype_FRAGMENT_BIN_START:
+        case WStype_FRAGMENT:
+        case WStype_FRAGMENT_FIN:
+            break;
+    }
 }
 
 void saveWifiCallback() {
@@ -152,14 +307,17 @@ String minutesToTime(int totalMinutes) {
   return String(hours < 10 ? "0" : "") + String(hours) + ":" + String(minutes < 10 ? "0" : "") + String(minutes);
 }
 
+/** @brief Turns the laser connected to outputPin ON. */
 void turnLaserOn() {
   digitalWrite(outputPin, HIGH);
 }
 
+/** @brief Turns the laser connected to outputPin OFF. */
 void turnLaserOff() {
   digitalWrite(outputPin, LOW);
 }
 
+/** @brief Displays a message on the OLED screen prompting user to connect to the WiFiManager AP. */
 void displayConnectAPMessage() {
   display.clearDisplay();
   display.setTextSize(1); // Larger text size
@@ -198,9 +356,30 @@ void showBongoCat(){
   // }
 }
 
+/**
+ * @brief Initializes the ESP32 DevKitV1 board.
+ *
+ * This function performs the following setup tasks:
+ * - Disables the brownout detector.
+ * - Initializes Serial communication (both primary and Serial2 for ESP32CAM).
+ * - Generates and stores the unique device ID.
+ * - Initializes I2C communication for the OLED display.
+ * - Initializes the OLED display and shows a startup animation.
+ * - Enables touch wakeup functionality.
+ * - Loads saved configuration settings (servo limits, velocities, timezone, NTP interval, timers) from Preferences (NVS).
+ * - Initializes output pins for laser and relay.
+ * - Attaches and initializes servo motors to their default positions.
+ * - Sets up WiFiManager for Wi-Fi connection and credential management.
+ *   - If autoConnect fails, it starts a configuration portal.
+ *   - On successful connection, initializes the NTP client for time synchronization.
+ * - Initializes ArduinoOTA for over-the-air updates.
+ * - Initializes the WebSocket client and sets up its event handler and reconnect interval.
+ */
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Disable brownout detector
   Serial.begin(115200);
+  deviceId = getChipId();
+  Serial.println("Device ID: " + deviceId);
   Serial2.begin(115200); // Initialize Serial2
   // Initialize I2C communication
   Wire.begin(SDA_PIN, SCL_PIN);
@@ -323,7 +502,14 @@ showBongoCat();
   });
   ArduinoOTA.begin();
 
-  server.begin();
+  // webSocket.begin(wsHost, wsPort, wsPath, "ws"); // For unencrypted WebSocket
+  // For WSS (SSL), you might need to specify fingerprints or use setCACert
+  // For now, assuming Nginx handles SSL termination and proxies to ws:// internally
+  webSocket.begin(wsHost, wsPort, wsPath);
+  webSocket.onEvent(webSocketEvent);
+  webSocket.setReconnectInterval(5000); // Already set via const but can be set here too
+  // Optional: for SSL, if your server uses a self-signed cert or you want to pin.
+  // webSocket.setFingerprint("...");
 }
 
 
@@ -411,6 +597,13 @@ void updateDisplay() {
 }
 
 // Function to start a smooth servo movement
+/**
+ * @brief Initiates a smooth, non-blocking movement for a specified servo.
+ * @param servo The Servo object to control.
+ * @param movement A reference to the ServoMovement struct tracking this servo's state.
+ * @param targetPos The target position (angle) for the servo.
+ * @param moveTime The total duration in milliseconds the movement should take.
+ */
 void startServoMovement(Servo& servo, ServoMovement &movement, int targetPos, int moveTime) {
   movement.startPos = servo.read();
   movement.targetPos = targetPos;
@@ -420,6 +613,12 @@ void startServoMovement(Servo& servo, ServoMovement &movement, int targetPos, in
 }
 
 // Function to update servo position smoothly (non-blocking)
+/**
+ * @brief Updates the position of a servo during a smooth movement.
+ * Call this repeatedly in the loop for each servo that might be moving.
+ * @param servo The Servo object to control.
+ * @param movement A reference to the ServoMovement struct tracking this servo's state.
+ */
 void updateServoMovement(Servo& servo, ServoMovement &movement) {
   if (movement.isMoving) {
     unsigned long elapsedTime = millis() - movement.startTime;
@@ -440,6 +639,14 @@ void testServo(Servo& servo, int minPos, int maxPos) {
   servo.write(maxPos);
 }
 
+/**
+ * @brief Manages random, non-blocking movements for both servos.
+ *
+ * When called, if enough time has passed since the last random move (defined by `movementInterval`),
+ * it calculates new random target positions for both servos within their configured min/max ranges.
+ * It then calculates a movement duration based on the distance to travel and initiates
+ * smooth movements using `startServoMovement()`. A new random `movementInterval` is set for the next cycle.
+ */
 void moveServosRandomlyNonBlocking() {
     unsigned long currentMillis = millis();
 
@@ -473,333 +680,6 @@ void moveServosRandomlyNonBlocking() {
       movementInterval = random(minMotionInterval, maxMotionInterval + 1);
 
     }
-}
-
-void handleClientRequest() {
-  WiFiClient client = server.available();
-  if (client) {
-    unsigned long currentTime = millis();
-    unsigned long previousTime = currentTime;
-    String currentLine = "";
-    String header = "";
-
-    Serial.println("New Client.");
-    while (client.connected() && currentTime - previousTime <= timeoutTime) {
-      currentTime = millis();
-      if (client.available()) {
-        char c = client.read();
-        Serial.write(c);
-        header += c;
-
-        if (c == '\n') {
-          if (currentLine.length() == 0) {
-            // HTTP Response Header
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println("Connection: close");
-            client.println();
-
-            // HTML Content - Start
-            client.println("<!DOCTYPE html><html>");
-            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            client.println("<style>body { text-align: center; font-family: \"Trebuchet MS\", Arial; } .slider { width: 300px; }</style>");
-            client.println("<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js\"></script>");
-            client.println("</head><body><h1>Kytsa Laser</h1>");
-
-            // Random Motion Controls (Visible)
-            client.println("<h2>Random Motion</h2>");
-            client.println("<button onclick=\"toggleRandom()\" id=\"randomButton\">Toggle Random Movement</button>");
-
-            // Configuration Section - Collapsed by Default
-            client.println("<details>");
-            client.println("<summary>Configuration</summary>");
-
-            // Servo Control for X and Y
-            client.println("<h3>Servo X Control</h3>");
-            client.println("<p>Position X: <span id=\"servoPosX\"></span> (Min: <span id=\"minX\">" + String(minX) + "</span> Max: <span id=\"maxX\">" + String(maxX) + "</span>)</p>");
-            client.println("<input type=\"range\" min=\"0\" max=\"180\" class=\"slider\" id=\"servoSliderX\" onchange=\"servoX(this.value)\" value=\"" + valueStringX + "\"/>");
-            client.println("<button onclick=\"setMinX()\">Set Min X</button> <button onclick=\"setMaxX()\">Set Max X</button>");
-            client.println("<button onclick=\"testX()\">Test Servo X</button>");
-
-            client.println("<h3>Servo Y Control</h3>");
-            client.println("<p>Position Y: <span id=\"servoPosY\"></span> (Min: <span id=\"minY\">" + String(minY) + "</span> Max: <span id=\"maxY\">" + String(maxY) + "</span>)</p>");
-            client.println("<input type=\"range\" min=\"45\" max=\"135\" class=\"slider\" id=\"servoSliderY\" onchange=\"servoY(this.value)\" value=\"" + valueStringY + "\"/>");
-            client.println("<button onclick=\"setMinY()\">Set Min Y</button> <button onclick=\"setMaxY()\">Set Max Y</button>");
-            client.println("<button onclick=\"testY()\">Test Servo Y</button>");
-
-            // Velocity Controls (minVel and maxVel)
-            client.println("<h3>Velocity Controls</h3>");
-            client.println("<p>Min Velocity: <input type=\"number\" id=\"minVel\" value=\"" + String(minVel) + "\" /></p>");
-            client.println("<p>Max Velocity: <input type=\"number\" id=\"maxVel\" value=\"" + String(maxVel) + "\" /></p>");
-            client.println("<button onclick=\"saveVelocities()\">Save Velocities</button>");
-
-            // Timezone Setting
-            client.println("<h3>Timezone Setting</h3>");
-            client.println("<p>Timezone Offset (hours from UTC): <input type=\"number\" id=\"timezoneOffset\" value=\"" + String(timeZoneOffset) + "\" /></p>");
-            client.println("<p>NTP Update Interval (milliseconds): <input type=\"number\" id=\"ntpInterval\" value=\"" + String(ntpUpdateInterval) + "\" /></p>");
-            client.println("<button onclick=\"saveTimeSettings()\">Save Time Settings</button>");
-
-            client.println("</details>"); // End of Configuration Section
-
-            // Random Motion Scheduling (Visible)
-            client.println("<h2>Random Motion Schedule</h2>");
-            client.println("<div id=\"schedule-container\">");
-            // Display existing timers
-            for (int i = 0; i < numTimeSlots; i++) {
-              if (timeSlots[i].startTimeMinutes != -1 && timeSlots[i].stopTimeMinutes != -1) {
-                client.printf("<p id=\"timer-%d\">Start: %s, Stop: %s <button onclick=\"deleteTimer(%d)\">Delete</button></p>",
-                              i, minutesToTime(timeSlots[i].startTimeMinutes).c_str(), minutesToTime(timeSlots[i].stopTimeMinutes).c_str(), i);
-              }
-            }
-            client.println("</div>");
-
-            // Add new timer (Visible)
-            client.println("<h3>Add New Timer</h3>");
-            client.println("<p>Start Time: <input type=\"time\" id=\"newStartTime\"></p>");
-            client.println("<p>Stop Time: <input type=\"time\" id=\"newStopTime\"></p>");
-            client.println("<button onclick=\"addTimerAction()\">Add Timer</button>");
-
-            // Live Stream (Visible)
-            client.println("<h2>Live Stream</h2>");
-            if (esp32CamConnected) {
-              client.println("<button onclick=\"startStream()\">Start Stream</button>");
-              client.println("<button onclick=\"stopStream()\">Stop Stream</button>");
-              client.println("<button onclick=\"ledOn()\">Turn LED On</button>");
-              client.println("<button onclick=\"ledOff()\">Turn LED Off</button>");
-              client.println("<div id=\"stream-container\" style=\"transform: rotate(180deg);\">");
-              if (streaming) {
-                client.println("<img id=\"stream\" src=\"http://" + esp32CamIP + "/?t=" + millis() + "\" width=\"800\" height=\"600\">");
-              } else {
-                client.println("<p>Stream is currently stopped.</p>");
-              }
-              client.println("</div>");
-            } else {
-              client.println("<p>ESP32-CAM not connected or IP not received.</p>");
-            }
-
-            // JavaScript Handlers
-            client.println("<script>var sliderX = document.getElementById(\"servoSliderX\");");
-            client.println("var servoPX = document.getElementById(\"servoPosX\"); servoPX.innerHTML = sliderX.value;");
-            client.println("sliderX.oninput = function() { servoPX.innerHTML = this.value; }");
-            client.println("function servoX(pos) { $.get('/?valueX=' + pos); }");
-            client.println("function setMinX() { $.get('/?setMinX=' + sliderX.value, function() { document.getElementById(\"minX\").innerText = sliderX.value; }); }");
-            client.println("function setMaxX() { $.get('/?setMaxX=' + sliderX.value, function() { document.getElementById(\"maxX\").innerText = sliderX.value; }); }");
-            client.println("function testX() { $.get('/?testX=1'); }");
-
-            client.println("var sliderY = document.getElementById(\"servoSliderY\");");
-            client.println("var servoPY = document.getElementById(\"servoPosY\"); servoPY.innerHTML = sliderY.value;");
-            client.println("sliderY.oninput = function() { servoPY.innerHTML = this.value; }");
-            client.println("function servoY(pos) { $.get('/?valueY=' + pos); }");
-            client.println("function setMinY() { $.get('/?setMinY=' + sliderY.value, function() { document.getElementById(\"minY\").innerText = sliderY.value; }); }");
-            client.println("function setMaxY() { $.get('/?setMaxY=' + sliderY.value, function() { document.getElementById(\"maxY\").innerText = sliderY.value; }); }");
-            client.println("function testY() { $.get('/?testY=1'); }");
-
-            // Save velocities
-            client.println("function saveVelocities() {");
-            client.println("  var minVel = document.getElementById('minVel').value;");
-            client.println("  var maxVel = document.getElementById('maxVel').value;");
-            client.println("  $.get('/?saveVelocities=' + minVel + '&maxVel=' + maxVel);");
-            client.println("}");
-            // Save Time Settings
-            client.println("function saveTimeSettings() {");
-            client.println("  var timezoneOffset = document.getElementById('timezoneOffset').value;");
-            client.println("  var ntpInterval = document.getElementById('ntpInterval').value;");
-            client.println("  $.get('/?saveTimeSettings=' + timezoneOffset + '&ntpInterval=' + ntpInterval);");
-            client.println("}");
-
-            client.println("var startStreamButtonEnabled = true;");
-            client.println("function startStream() {");
-            client.println("  if (startStreamButtonEnabled) {");
-            client.println("    startStreamButtonEnabled = false;");
-            client.println("    $('#startStreamButton').prop('disabled', true);");
-            client.println("    $.get('/?startStream=1', function(data, status){");
-            client.println("      if(status == 'success'){");
-            client.println("        $('#stream-container').html('<img id=\"stream\" src=\"http://' + '" + esp32CamIP + "' + '/?t=' + new Date().getTime() + '\" width=\"800\" height=\"600\">');");
-            client.println("        setTimeout(function() {");
-            client.println("          startStreamButtonEnabled = true;");
-            client.println("          $('#startStreamButton').prop('disabled', false);");
-            client.println("        }, 5000);");
-            client.println("      }");
-            client.println("    });");
-            client.println("  }");
-            client.println("}");
-            client.println("function stopStream() {");
-            client.println("  $.get('/?stopStream=1', function(data, status){");
-            client.println("    if(status == 'success'){");
-            client.println("      $('#stream-container').empty();");
-            client.println("      startStreamButtonEnabled = false;");
-            client.println("      $('#startStreamButton').prop('disabled', true);");
-            client.println("      setTimeout(function() {");
-            client.println("        startStreamButtonEnabled = true;");
-            client.println("        $('#startStreamButton').prop('disabled', false);");
-            client.println("      }, 5000);");
-            client.println("    }");
-            client.println("  });");
-            client.println("}");
-            client.println("function ledOn() { $.get('/?ledOn=1'); }");
-            client.println("function ledOff() { $.get('/?ledOff=1'); }");
-            client.println("function toggleRandom() {");
-            client.println("  $.get('/?toggleRandom=1');");
-            client.println("}");
-            client.println("function addTimerAction() {");
-            client.println("  var startTime = $('#newStartTime').val();");
-            client.println("  var stopTime = $('#newStopTime').val();");
-            client.println("  if (startTime && stopTime) {");
-            client.println("    $.get('/?addTimer=1&startTime=' + startTime + '&stopTime=' + stopTime, function(data, status) {");
-            client.println("      if (status == 'success') {");
-            client.println("        window.location.reload(); // Refresh the page");
-            client.println("      }");
-            client.println("    });");
-            client.println("  }");
-            client.println("}");
-
-            client.println("function deleteTimer(index) {");
-            client.println("  $.get('/?deleteTimer=1&index=' + index, function(data, status) {");
-            client.println("    if (status == 'success') {");
-            client.println("      window.location.reload(); // Refresh the page");
-            client.println("    }");
-            client.println("  });");
-            client.println("}");
-            client.println("</script></body></html>");
-          }
-
-          // Handle GET Requests
-          if (header.indexOf("GET /?toggleRandom=1") >= 0) {
-            inConfiguration = false;
-            randomMotionActive = !randomMotionActive; // Toggle the manual state
-            if (isScheduledMovementActive && randomMotionActive == false) {
-              scheduledMovementOverridden = true; // Override if schedule is active and button is pressed to stop
-              Serial.println("Scheduled movement overridden by button.");
-            } else if (scheduledMovementOverridden && randomMotionActive == true) {
-              scheduledMovementOverridden = false; // Re-enable scheduled movement if button is pressed again
-              Serial.println("Scheduled movement re-enabled by button.");
-            }
-            Serial.print("Random Motion Active (Manual): ");
-            Serial.println(randomMotionActive);
-            Serial.print("Scheduled Movement Overridden: ");
-            Serial.println(scheduledMovementOverridden);
-          } else if (header.indexOf("GET /?valueX=") >= 0) {
-            inConfiguration = true;
-            turnLaserOn();
-            int pos = header.indexOf('=') + 1;
-            valueStringX = header.substring(pos);
-            myservoX.write(valueStringX.toInt());
-          } else if (header.indexOf("GET /?valueY=") >= 0) {
-            inConfiguration = true;
-            turnLaserOn();
-            int pos = header.indexOf('=') + 1;
-            valueStringY = header.substring(pos);
-            myservoY.write(valueStringY.toInt());
-          } else if (header.indexOf("GET /?setMinX=") >= 0) {
-            int pos = header.indexOf('=') + 1;
-            preferences.putInt("min_x", header.substring(pos).toInt());
-            minX = preferences.getInt("min_x", 0); // Update current value
-          } else if (header.indexOf("GET /?setMaxX=") >= 0) {
-            int pos = header.indexOf('=') + 1;
-            preferences.putInt("max_x", header.substring(pos).toInt());
-            maxX = preferences.getInt("max_x", 180); // Update current value
-          } else if (header.indexOf("GET /?setMinY=") >= 0) {
-            int pos = header.indexOf('=') + 1;
-            preferences.putInt("min_y", header.substring(pos).toInt());
-            minY = preferences.getInt("min_y", 45); // Update current value
-          } else if (header.indexOf("GET /?setMaxY=") >= 0) {
-            int pos = header.indexOf('=') + 1;
-            preferences.putInt("max_y", header.substring(pos).toInt());
-            maxY = preferences.getInt("max_y", 135); // Update current value
-          } else if (header.indexOf("GET /?testX=1") >= 0) {
-            testServo(myservoX, preferences.getInt("min_x", 0), preferences.getInt("max_x", 180));
-          } else if (header.indexOf("GET /?testY=1") >= 0) {
-            testServo(myservoY, preferences.getInt("min_y", 45), preferences.getInt("max_y", 135));
-          } else if (header.indexOf("GET /?saveVelocities=") >= 0) {
-            int minPos = header.indexOf('=') + 1;
-            int maxPosAmp = header.indexOf('&');
-            if (minPos > 0 && maxPosAmp > minPos) {
-              String minVelStr = header.substring(minPos, maxPosAmp);
-              int minVelValue = minVelStr.toInt();
-              int maxVelPos = header.indexOf("maxVel=") + 7;
-              if (maxVelPos > 6) {
-                String maxVelStr = header.substring(maxVelPos);
-                int maxVelValue = maxVelStr.toInt();
-                Serial.print("Saving Min Velocity (Preferences): ");
-                Serial.println(minVelValue);
-                Serial.print("Saving Max Velocity (Preferences): ");
-                Serial.println(maxVelValue);
-                preferences.putInt("min_vel", minVelValue);
-                preferences.putInt("max_vel", maxVelValue);
-                minVel = minVelValue; // Update current value
-                maxVel = maxVelValue; // Update current value
-              }
-            }
-          } else if (header.indexOf("GET /?saveTimeSettings=") >= 0) {
-            int tzPos = header.indexOf('=') + 1;
-            int intervalPosAmp = header.indexOf('&');
-            if (tzPos > 0 && intervalPosAmp > tzPos) {
-              String timezoneStr = header.substring(tzPos, intervalPosAmp);
-              int timezoneValue = timezoneStr.toInt();
-              int intervalPos = header.indexOf("ntpInterval=") + 12;
-              if (intervalPos > 11) {
-                String intervalStr = header.substring(intervalPos);
-                long intervalValue = intervalStr.toInt();
-
-                Serial.print("Saving Timezone (Preferences): ");
-                Serial.println(timezoneValue);
-                Serial.print("Saving NTP Interval (Preferences): ");
-                Serial.println(intervalValue);
-
-                preferences.putInt("timezone", timezoneValue); // save
-                preferences.putLong("ntp_interval", intervalValue); //save
-
-                timeZoneOffset = timezoneValue; //update
-                ntpUpdateInterval = intervalValue; // update
-
-                timeClient.setTimeOffset(timeZoneOffset * 3600); //update
-              }
-            }
-          } else if (header.indexOf("GET /?startStream=1") >= 0 && esp32CamConnected && !streaming) {
-            Serial2.println("START_STREAM");
-            Serial.println("Sent command: START_STREAM");
-            streaming = true;
-          } else if (header.indexOf("GET /?stopStream=1") >= 0 && streaming) {
-            Serial2.println("STOP_STREAM");
-            Serial.println("Sent command: STOP_STREAM");
-            streaming = false;
-          } else if (header.indexOf("GET /?ledOn=1") >= 0 && esp32CamConnected) {
-            Serial2.println("LED_ON");
-            Serial.println("Sent command: LED_ON");
-          } else if (header.indexOf("GET /?ledOff=1") >= 0 && esp32CamConnected) {
-            Serial2.println("LED_OFF");
-            Serial.println("Sent command: LED_OFF");
-          } else if (header.indexOf("GET /?addTimer=1") >= 0) {
-            int startTimePos = header.indexOf("startTime=") + 10;
-            int stopTimePos = header.indexOf("&stopTime=") + 10;
-            if (startTimePos > 9 && stopTimePos > 9) {
-              String startTimeStr = header.substring(startTimePos, header.indexOf('&', startTimePos));
-              String stopTimeStr = header.substring(stopTimePos);
-              addTimeSlot(startTimeStr, stopTimeStr);
-              preferences.end(); // Ensure data is written to flash
-              delay(10);        // Small delay to allow write operation
-            }
-            // No direct HTML response here, AJAX will handle it
-          } else if (header.indexOf("GET /?deleteTimer=1") >= 0) {
-            int indexPos = header.indexOf("index=") + 6;
-            if (indexPos > 5) {
-              int indexToDelete = header.substring(indexPos).toInt();
-              deleteTimeSlot(indexToDelete);
-              preferences.end(); // Ensure data is written to flash
-              delay(10);        // Small delay to allow write operation
-            }
-            // No direct HTML response here, AJAX will handle it
-          }
-
-          // End the response
-          client.println();
-          client.stop();
-          Serial.println("Client Disconnected.");
-          break;
-        }
-      }
-    }
-  }
 }
 
 // Function to display settings on OLED
@@ -983,9 +863,40 @@ void readTouch() {
   }
 }
 
+/**
+ * @brief Main loop of the ESP32 DevKitV1 application.
+ *
+ * This function is executed repeatedly and handles the core logic:
+ * - Handles ArduinoOTA updates.
+ * - Processes WebSocket client events and reconnection logic.
+ * - Reads touch pin inputs for sleep/wake and settings adjustment.
+ * - Manages scheduled movements based on NTP time and configured time slots.
+ * - Controls random servo movements if enabled (either by schedule or manual toggle).
+ * - Updates servo positions for smooth, non-blocking movements.
+ * - Updates the OLED display based on current mode (normal, settings) and status.
+ * - Sends periodic status updates to the WebSocket server.
+ * - Handles serial communication with the ESP32CAM (receiving status, sending commands).
+ * - Manages WiFi connection using WiFiManager, attempting to reconnect if disconnected.
+ * - Forwards commands received via main Serial to the ESP32CAM via Serial2.
+ * - Periodically updates NTP time.
+ */
 void loop() {
   ArduinoOTA.handle();
+  webSocket.loop();
   readTouch();
+
+  if (!webSocketConnected && WiFi.status() == WL_CONNECTED) {
+    if (millis() - webSocketLastReconnectAttempt > webSocketReconnectInterval) {
+      webSocketLastReconnectAttempt = millis();
+      Serial.println("Attempting to reconnect WebSocket...");
+      // webSocket.begin() should ideally handle reconnection attempts if using setReconnectInterval
+      // but an explicit begin call might be needed if the initial connection fails repeatedly.
+      // For now, rely on setReconnectInterval and internal handling.
+      // If connection drops, the library should try to reconnect.
+      // If initial connect fails, this might need an explicit webSocket.connect(host,port,path) or begin again.
+      // Let's assume library handles reconnects for now. If not, add explicit webSocket.connect() here.
+    }
+  }
 
   bool shouldMoveRandomlyThisCycle = false;
   String scheduledStartTime = ""; // Local variables to store the times
@@ -1043,7 +954,34 @@ void loop() {
     updateDisplay();
   }
 
-  handleClientRequest();
+  // Status Sending Logic
+  static unsigned long lastStatusUpdateTime = 0;
+  unsigned long statusUpdateInterval = 10000; // Send status every 10 seconds
+
+  if (webSocketConnected && (millis() - lastStatusUpdateTime > statusUpdateInterval)) {
+    lastStatusUpdateTime = millis();
+    StaticJsonDocument<512> doc; // Increased size for more status data
+    doc["type"] = "statusUpdate";
+    // No need to send deviceId, server knows it from connection object
+
+    JsonObject data = doc.createNestedObject("data");
+    data["uptime_ms"] = millis();
+    data["wifi_rssi"] = WiFi.RSSI();
+    data["servoX_pos"] = myservoX.read();
+    data["servoY_pos"] = myservoY.read();
+    data["laser_active"] = digitalRead(outputPin) == HIGH;
+    data["relay_active"] = relayActive;
+    data["random_motion_active"] = randomMotionActive;
+    data["is_scheduled_movement_active"] = isScheduledMovementActive;
+    data["esp32cam_connected"] = esp32CamConnected;
+    data["esp32cam_streaming"] = streaming;
+    // Add other relevant status data
+
+    String output;
+    serializeJson(doc, output);
+    webSocket.sendTXT(output);
+    Serial.println("Sent status update: " + output);
+  }
 
   // Read and print any data coming from the ESP32-CAM on Serial2
   if (Serial2.available() > 0) {
