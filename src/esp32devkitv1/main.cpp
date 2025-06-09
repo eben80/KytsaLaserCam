@@ -179,6 +179,10 @@ String getChipId() {
     return String(chipid_str);
 }
 
+// Forward declarations for functions called in webSocketEvent
+void turnLaserOn();
+void turnLaserOff();
+
 /**
  * @brief Handles events from the WebSocket client.
  *
