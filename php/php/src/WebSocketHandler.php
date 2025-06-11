@@ -37,6 +37,23 @@ class WebSocketHandler implements MessageComponentInterface {
     public function onOpen(ConnectionInterface $conn) {
         $this->clients->attach($conn);
         echo "New connection! ({$conn->resourceId})\n";
+
+        // Log HTTP Request Headers
+        if (isset($conn->httpRequest)) {
+            $httpRequest = $conn->httpRequest;
+            echo "Attempting WebSocket handshake. Request Headers for connection {$conn->resourceId}:\n";
+            echo "  Method: " . $httpRequest->getMethod() . "\n";
+            echo "  URI: " . (string)$httpRequest->getUri() . "\n";
+            echo "  Version: " . $httpRequest->getProtocolVersion() . "\n";
+            foreach ($httpRequest->getHeaders() as $name => $values) {
+                echo "  Header: " . $name . ": " . implode(", ", $values) . "\n";
+            }
+            echo "------------------------------------\n";
+        } else {
+            echo "httpRequest property not found on ConnectionInterface for connection {$conn->resourceId}. Cannot log headers.\n";
+        }
+        // The rest of the onOpen logic (e.g., waiting for pairing message) remains.
+        // The decision to classify as ESP32 or WebUI happens in onMessage.
     }
 
     /**

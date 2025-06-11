@@ -280,10 +280,15 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             // hexdump(payload, length); // Example: webSocket.sendBIN(payload, length);
             break;
         case WStype_ERROR:
+            Serial.printf("[WSc] WebSocket ERROR: %s\n", (char*)payload);
+            webSocketConnected = false; // Ensure this is set on error too
+            break;
         case WStype_FRAGMENT_TEXT_START:
         case WStype_FRAGMENT_BIN_START:
         case WStype_FRAGMENT:
         case WStype_FRAGMENT_FIN:
+            // Log these events if needed for debugging fragmentation issues
+            // Serial.printf("[WSc] WebSocket FRAGMENT event type: %d\n", type);
             break;
     }
 }
@@ -506,6 +511,10 @@ showBongoCat();
     Serial.printf("OTA Error[%u]\n", error);
   });
   ArduinoOTA.begin();
+
+  // Set Origin header, which might be required/expected by the WebSocket server or proxy (Nginx/Ratchet)
+  // for a successful handshake, especially for proxied connections.
+  webSocket.setOrigin("https://www.ebski.co");
 
   // Connect to WSS (WebSocket Secure) server.
   // For production systems with public CAs (like Let's Encrypt), this should work.
