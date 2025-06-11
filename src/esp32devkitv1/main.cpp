@@ -521,6 +521,12 @@ showBongoCat();
   // This is to mimic a common browser, in case of User-Agent based filtering or behavior on server/proxy.
   webSocket.setExtraHeaders("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 ESP32WebSocketClient\r\n");
 
+  // Prevent client from sending Sec-WebSocket-Protocol: arduino,
+  // as the Ratchet server is not configured for any specific subprotocols
+  // and rejects requests that ask for unsupported ones.
+  const char* subprotocols[] = {}; // Define an empty array of C-strings
+  webSocket.setSubprotocols(subprotocols, 0); // Pass empty array and count 0
+
   // Connect to WSS (WebSocket Secure) server.
   // For production systems with public CAs (like Let's Encrypt), this should work.
   // If connection issues occur with SSL, you might need to provide a root CA certificate
