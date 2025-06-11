@@ -517,6 +517,9 @@ showBongoCat();
   // for a successful handshake, especially for proxied connections.
   // webSocket.setExtraHeaders("Origin: https://www.ebski.co\r\n"); // Temporarily commented out for debugging
 
+  // Change User-Agent to mimic a common browser, in case of User-Agent based filtering or behavior on server/proxy.
+  webSocket.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 ESP32WebSocketClient");
+
   // Connect to WSS (WebSocket Secure) server.
   // For production systems with public CAs (like Let's Encrypt), this should work.
   // If connection issues occur with SSL, you might need to provide a root CA certificate
