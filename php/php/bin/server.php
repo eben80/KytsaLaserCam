@@ -7,13 +7,15 @@ use MyApp\WebSocketHandler;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+$wsServer = new WsServer(
+    new WebSocketHandler(),
+    ['arduino'] // Explicitly allow 'arduino' subprotocol
+);
+// $wsServer->setStrictSubProtocolCheck(false); // Another option if just allowing any, but explicit is better
+
 $server = IoServer::factory(
-    new HttpServer(
-        new WsServer(
-            new WebSocketHandler()
-        )
-    ),
-    8080
+    new HttpServer($wsServer),
+    8080 // Port to listen on
 );
 
 echo "Starting WebSocket server on port 8080...\n";

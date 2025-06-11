@@ -524,8 +524,8 @@ showBongoCat();
   // Prevent client from sending Sec-WebSocket-Protocol: arduino,
   // as the Ratchet server is not configured for any specific subprotocols
   // and rejects requests that ask for unsupported ones.
-  const char* subprotocols[] = {}; // Define an empty array of C-strings
-  webSocket.setSubprotocols(subprotocols, 0); // Pass empty array and count 0
+  // const char* subprotocols[] = {}; // Define an empty array of C-strings
+  // webSocket.setSubprotocols(subprotocols, 0); // Pass empty array and count 0
 
   // Connect to WSS (WebSocket Secure) server.
   // For production systems with public CAs (like Let's Encrypt), this should work.
