@@ -1,3 +1,21 @@
+# IMPORTANT NGINX CONFIGURATION NOTE:
+# The following 'map' block should be placed in your main nginx.conf file,
+# inside the 'http { ... }' context, or in a file included from within the http context.
+# It typically does NOT go directly inside a 'server { ... }' block for a virtual host.
+#
+# http {
+#     map $http_upgrade $connection_upgrade {
+#         default upgrade;
+#         ''      close;
+#     }
+#
+#     # ... other http context directives ...
+#
+#     include /etc/nginx/sites-enabled/*; # This would then include this ebski.co file
+# }
+#
+# END IMPORTANT NGINX CONFIGURATION NOTE
+
 # You may add here your
 # server {
 #	...
@@ -18,6 +36,7 @@
 ##
 
 server {
+    # ... (rest of the http server block on port 80 remains unchanged) ...
     if ($host = ebski.co) {
         return 301 https://$host$request_uri;
     } # managed by Certbot
@@ -74,107 +93,69 @@ server {
 }
 
 
-# another virtual host using mix of IP-, name-, and port-based configuration
-#
-#server {
-#	listen 8000;
-#	listen somename:8080;
-#	server_name somename alias another.alias;
-#	root html;
-#	index index.html index.htm;
-#
-#	location / {
-#		try_files $uri $uri/ =404;
-#	}
-#}
-
-
 # HTTPS server
 #
 server {
         listen 443 ssl http2;
         server_name ebski.co www.ebski.co;
 
-	error_log /var/www/ebski.co/error.log;
-	access_log /var/www/ebski.co/access.log;
-        root /var/www/ebski.co/html;
+        error_log /var/www/ebski.co/error.log;
+        access_log /var/www/ebski.co/access.log;
+        root /var/www/ebski.co/html; # This is the general root for this server block
         index index.html index.php;
 
-#    include snippets/ssl-ebski.co.conf;
-#    include snippets/ssl-params.conf;
-#	include global/restrictions.conf;
-#	include global/wordpress.conf;
-
         location ^~ /kytsa/ {
-            alias /var/www/ebski.co/kytsa_web_interface/; # Note the trailing slash on alias
+            alias /var/www/ebski.co/kytsa_web_interface/;
             index index.html;
             try_files $uri $uri/ /kytsa/index.html;
-
-            # Optional: Add specific caching rules for assets within /kytsa/ if needed
-            # location ~* ^/kytsa/(.+\.(jpg|jpeg|png|gif|ico|css|js|mp4))$ {
-            #    expires 365d;
-            #    add_header Cache-Control "public";
-            # }
         }
 
         location / {
-                # First attempt to serve request as file, then
-                # as directory, then fall back to displaying a 404.
-                # try_files $uri $uri/ =404;
-		try_files $uri $uri/ /index.html /index.php?$args;
-                # Uncomment to enable naxsi on this location
-                # include /etc/nginx/naxsi.rules
-
+            try_files $uri $uri/ /index.html /index.php?$args;
         }
 
-    location = /receive {
-        include fastcgi_params;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock; # Adjust PHP-FPM version
-        fastcgi_param SCRIPT_FILENAME $document_root/mjpeg_server.php; # Directly point to the script
-        # The SCRIPT_NAME will be /receive, and the PHP script will get it as $_SERVER['REQUEST_URI']
-        fastcgi_param REQUEST_URI /receive; # Explicitly set REQUEST_URI if needed, though $fastcgi_script_name might pass it
-	    # Disable buffering for streaming
-    proxy_buffering off;
-    proxy_http_version 1.1; # Often good for streaming
-    proxy_set_header Connection ""; # Clear connection header if needed
-	access_log off;
-    # Or for fastcgi (more relevant here since it's PHP-FPM):
-    fastcgi_buffering off;
-    fastcgi_no_cache 1; # Don't cache responses
-    fastcgi_keep_conn on; # Keep connection open
-    }
+        location = /receive {
+            include fastcgi_params;
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME /var/www/ebski.co/php_backend/mjpeg_server.php; # Assuming user adjusted this as per DEPLOY_GUIDE.md
+            fastcgi_param REQUEST_URI /receive;
+            proxy_buffering off;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            access_log off;
+            fastcgi_buffering off;
+            fastcgi_no_cache 1;
+            fastcgi_keep_conn on;
+        }
 
-    location = /stream {
-        include fastcgi_params;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock; # Adjust PHP-FPM version
-        fastcgi_param SCRIPT_FILENAME $document_root/mjpeg_server.php; # Directly point to the script
-        fastcgi_param REQUEST_URI /stream; # Explicitly set REQUEST_URI if needed
-    # Disable buffering for streaming
-    proxy_buffering off;
-    proxy_http_version 1.1; # Often good for streaming
-    proxy_set_header Connection ""; # Clear connection header if needed
-# access_log off;
-    # Or for fastcgi (more relevant here since it's PHP-FPM):
-    fastcgi_buffering off;
-    fastcgi_no_cache 1; # Don't cache responses
-    fastcgi_keep_conn on; # Keep connection open
-    }
+        location = /stream {
+            include fastcgi_params;
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME /var/www/ebski.co/php_backend/mjpeg_server.php; # Assuming user adjusted this
+            fastcgi_param REQUEST_URI /stream;
+            proxy_buffering off;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            fastcgi_buffering off;
+            fastcgi_no_cache 1;
+            fastcgi_keep_conn on;
+        }
 
-    		location ~*  \.(jpg|jpeg|png|gif|ico|css|js|mp4)$ {
-        expires 365d;
-    		}
+        location ~*  \.(jpg|jpeg|png|gif|ico|css|js|mp4)$ {
+            expires 365d;
+        }
 
         location /ws { # Path for WebSocket connections from client: wss://ebski.co/ws
             proxy_pass http://localhost:8080;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "keep-alive, Upgrade"; # MODIFIED LINE
+            proxy_set_header Connection $connection_upgrade; # MODIFIED LINE - uses variable from map
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme; # ADDED LINE
-            proxy_cache_bypass $http_upgrade; # This is fine, can be before or after other headers
-            # proxy_read_timeout 86400s; # e.g., 1 day, if connections are very long-lived and no other keepalives
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+            # proxy_read_timeout 86400s;
         }
 
         error_page 404 /404.html;
@@ -184,17 +165,13 @@ server {
         }
 
         location ~ \.php$ {
-        include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            include snippets/fastcgi-php.conf;
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
         }
 
         location ~ /.well-known {
                 allow all;
         }
-    ssl_certificate /etc/letsencrypt/live/ebski.co/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/ebski.co/privkey.pem; # managed by Certbot
-
-
-
+        ssl_certificate /etc/letsencrypt/live/ebski.co/fullchain.pem; # managed by Certbot
+        ssl_certificate_key /etc/letsencrypt/live/ebski.co/privkey.pem; # managed by Certbot
 }
-
