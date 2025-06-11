@@ -512,9 +512,10 @@ showBongoCat();
   });
   ArduinoOTA.begin();
 
-  // Set Origin header, which might be required/expected by the WebSocket server or proxy (Nginx/Ratchet)
+  // Set custom headers. Each header must end with \r\n.
+  // Adding Origin header, which might be required/expected by the WebSocket server or proxy (Nginx/Ratchet)
   // for a successful handshake, especially for proxied connections.
-  webSocket.setOrigin("https://www.ebski.co");
+  webSocket.setExtraHeaders("Origin: https://www.ebski.co\r\n");
 
   // Connect to WSS (WebSocket Secure) server.
   // For production systems with public CAs (like Let's Encrypt), this should work.
