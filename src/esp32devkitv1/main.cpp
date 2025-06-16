@@ -515,7 +515,7 @@ showBongoCat();
   // Set custom headers. Each header must end with \r\n.
   // Adding Origin header, which might be required/expected by the WebSocket server or proxy (Nginx/Ratchet)
   // for a successful handshake, especially for proxied connections.
-  // webSocket.setExtraHeaders("Origin: https://www.ebski.co\r\n"); // Temporarily commented out for debugging
+  webSocket.setExtraHeaders("Origin: https://www.ebski.co\r\n");
 
   // Ensure all custom header manipulations are commented out for this test
   // to use library defaults.
