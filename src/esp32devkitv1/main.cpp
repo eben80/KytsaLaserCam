@@ -517,15 +517,16 @@ showBongoCat();
   // for a successful handshake, especially for proxied connections.
   // webSocket.setExtraHeaders("Origin: https://www.ebski.co\r\n"); // Temporarily commented out for debugging
 
-  // Set custom User-Agent header. Each header must end with \r\n.
-  // This is to mimic a common browser, in case of User-Agent based filtering or behavior on server/proxy.
-  webSocket.setExtraHeaders("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 ESP32WebSocketClient\r\n");
+  // Ensure all custom header manipulations are commented out for this test
+  // to use library defaults.
+  // webSocket.setExtraHeaders("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 ESP32WebSocketClient\r\n");
 
-  // Prevent client from sending Sec-WebSocket-Protocol: arduino,
-  // as the Ratchet server is not configured for any specific subprotocols
-  // and rejects requests that ask for unsupported ones.
-  const char* subprotocols[] = {}; // Define an empty array of C-strings
-  webSocket.setSubprotocols(subprotocols, 0); // Pass empty array and count 0
+  // const char* subprotocols[] = {}; // THIS LINE SHOULD BE REMOVED/COMMENTED
+  // webSocket.setSubprotocols(subprotocols, 0); // THIS LINE SHOULD BE REMOVED/COMMENTED
+
+  // Set a browser-like User-Agent.
+  // The library will send its default Sec-WebSocket-Protocol: arduino.
+  // webSocket.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 ESP32WebSocketClient");
 
   // Connect to WSS (WebSocket Secure) server.
   // For production systems with public CAs (like Let's Encrypt), this should work.
