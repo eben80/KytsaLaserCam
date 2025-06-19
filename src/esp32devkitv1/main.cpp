@@ -156,7 +156,7 @@ String deviceId = ""; // Will be set to ESP32 Chip ID
 /** @brief Hostname or IP address of the WebSocket server. */
 const char* wsHost = "ebski.co";
 /** @brief Port number for the WebSocket server. WebSocket Secure (WSS) port. */
-const uint16_t wsPort = 443;
+const uint16_t wsPort = 80;
 /** @brief Path for the WebSocket endpoint on the server. (e.g., wss://ebski.co/ws) */
 const char* wsPath = "/ws";
 
@@ -515,7 +515,7 @@ showBongoCat();
   // Set custom headers. Each header must end with \r\n.
   // Adding Origin header, which might be required/expected by the WebSocket server or proxy (Nginx/Ratchet)
   // for a successful handshake, especially for proxied connections.
-  webSocket.setExtraHeaders("Origin: https://www.ebski.co\r\n");
+  // webSocket.setExtraHeaders("Origin: https://www.ebski.co\r\n");
 
   // Ensure all custom header manipulations are commented out for this test
   // to use library defaults.
@@ -533,7 +533,7 @@ showBongoCat();
   // If connection issues occur with SSL, you might need to provide a root CA certificate
   // or a fingerprint, e.g., webSocket.beginSSL(wsHost, wsPort, wsPath, "/path_to_ca_cert_on_fs", "fingerprint");
   // However, for many common CAs, the ESP32's underlying stack may handle it.
-  webSocket.beginSSL(wsHost, wsPort, wsPath);
+  webSocket.begin(wsHost, wsPort, wsPath);
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000); // Already set via const but can be set here too
   // Optional: for SSL, if your server uses a self-signed cert or you want to pin.

@@ -1,5 +1,4 @@
 <?php
-// Location: php/php/bin/server.php
 use Ratchet\Server\IoServer;
 use Ratchet\Http\HttpServer;
 use Ratchet\WebSocket\WsServer;
@@ -9,15 +8,15 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 $wsServer = new WsServer(
     new WebSocketHandler(),
-    ['arduino'] // Explicitly allow 'arduino' subprotocol
+    ['arduino'] // Allowed subprotocols
 );
-// $wsServer->setStrictSubProtocolCheck(false); // Another option if just allowing any, but explicit is better
 
 $server = IoServer::factory(
     new HttpServer($wsServer),
-    8080 // Port to listen on
+    8080
 );
 
 echo "Starting WebSocket server on port 8080...\n";
 $server->run();
 ?>
+
