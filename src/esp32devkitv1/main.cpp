@@ -182,6 +182,9 @@ String getChipId() {
 // Forward declarations for functions called in webSocketEvent
 void turnLaserOn();
 void turnLaserOff();
+void sendSystemConfig(); // Forward declaration for our new function
+void addTimeSlot(String startTimeStr, String stopTimeStr); // Ensure it's declared if not already before webSocketEvent
+void deleteTimeSlot(int indexToDelete); // Ensure it's declared
 
 /**
  * @brief Handles events from the WebSocket client.
@@ -211,13 +214,14 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 serializeJson(doc, output);
                 webSocket.sendTXT(output);
                 Serial.println("Sent pairing message: " + output);
+                sendSystemConfig(); // Send initial system config on connect
             }
             break;
         case WStype_TEXT:
             Serial.printf("[WSc] get text: %s\n", (char*)payload);
             // Parse JSON command from server
             {
-                StaticJsonDocument<256> doc; // Adjust size as needed
+                StaticJsonDocument<384> doc; // Increased size for potentially larger payloads like addTimer
                 DeserializationError error = deserializeJson(doc, payload, length);
                 if (error) {
                     Serial.print(F("deserializeJson() failed: "));
@@ -271,6 +275,47 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 } else if (strcmp(command, "CAM_LED_OFF") == 0) {
                     Serial2.println("LED_OFF");
                     Serial.println("Sent command to ESP32CAM: LED_OFF");
+                } else if (strcmp(command, "getSystemConfig") == 0) {
+                    Serial.println("Received getSystemConfig command");
+                    sendSystemConfig();
+                } else if (strcmp(command, "setServoLimit") == 0) {
+                    const char* axis = doc["axis"]; // "x" or "y"
+                    const char* limit_type = doc["limit_type"]; // "min" or "max"
+                    int value = doc["value"];
+                    Serial.printf("Received setServoLimit: axis=%s, type=%s, value=%d\n", axis, limit_type, value);
+
+                    preferences.begin("servo_config", false);
+                    if (strcmp(axis, "x") == 0) {
+                        if (strcmp(limit_type, "min") == 0) {
+                            minX = value;
+                            preferences.putInt("min_x", minX);
+                        } else if (strcmp(limit_type, "max") == 0) {
+                            maxX = value;
+                            preferences.putInt("max_x", maxX);
+                        }
+                    } else if (strcmp(axis, "y") == 0) {
+                        if (strcmp(limit_type, "min") == 0) {
+                            minY = value;
+                            preferences.putInt("min_y", minY);
+                        } else if (strcmp(limit_type, "max") == 0) {
+                            maxY = value;
+                            preferences.putInt("max_y", maxY);
+                        }
+                    }
+                    preferences.end();
+                    Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
+                    sendSystemConfig(); // Send updated config back
+                } else if (strcmp(command, "addTimer") == 0) {
+                    String startTime = doc["startTime"]; // "HH:MM"
+                    String endTime = doc["endTime"];   // "HH:MM"
+                    Serial.printf("Received addTimer: start=%s, end=%s\n", startTime.c_str(), endTime.c_str());
+                    addTimeSlot(startTime, endTime);
+                    sendSystemConfig(); // Send updated config back
+                } else if (strcmp(command, "deleteTimer") == 0) {
+                    int timerIndex = doc["timerIndex"];
+                    Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
+                    deleteTimeSlot(timerIndex);
+                    sendSystemConfig(); // Send updated config back
                 }
                 // Add more command handlers as needed
             }
@@ -540,30 +585,66 @@ showBongoCat();
   // webSocket.setFingerprint("...");
 }
 
+/**
+ * @brief Sends the current system configuration (servo limits, timers) to the WebSocket client.
+ *
+ * Constructs a JSON message containing the type "systemConfig", the current values of
+ * minX, maxX, minY, maxY, and an array of all configured timers. Each timer object
+ * in the array includes its startTimeMinutes and stopTimeMinutes.
+ * This message is then sent to the connected WebSocket client.
+ */
+void sendSystemConfig() {
+    if (!webSocketConnected) {
+        Serial.println("Cannot send system config, WebSocket not connected.");
+        return;
+    }
 
+    StaticJsonDocument<768> doc; // Adjusted size for system config
+    doc["type"] = "systemConfig";
+
+    JsonObject config = doc.createNestedObject("config");
+    config["minX"] = minX;
+    config["maxX"] = maxX;
+    config["minY"] = minY;
+    config["maxY"] = maxY;
+
+    JsonArray timersArray = config.createNestedArray("timers");
+    for (int i = 0; i < numTimeSlots; i++) {
+        JsonObject timer = timersArray.createNestedObject();
+        timer["startTimeMinutes"] = timeSlots[i].startTimeMinutes;
+        timer["stopTimeMinutes"] = timeSlots[i].stopTimeMinutes;
+        // 'active' field is mostly for internal ESP32 logic, not usually sent to client here
+        // but can be added if client needs to know raw 'active' state from struct.
+    }
+
+    String output;
+    serializeJson(doc, output);
+    webSocket.sendTXT(output);
+    Serial.println("Sent systemConfig: " + output);
+}
 
 void saveTimersToPreferences() {
-  preferences.begin("servo_config"); // Begin the session here
+  preferences.begin("servo_config", false); // Begin the session here, non-read-only
 
   preferences.putInt("num_timers", numTimeSlots);
   Serial.printf("Saved num_timers: %d\n", numTimeSlots);
-  Serial.printf("Read back num_timers: %d\n", preferences.getInt("num_timers", -99));
+  // Serial.printf("Read back num_timers: %d\n", preferences.getInt("num_timers", -99)); // Optional: Verification
 
   for (int i = 0; i < numTimeSlots; i++) {
     String startKey = "timer_" + String(i) + "_start";
     String stopKey = "timer_" + String(i) + "_stop";
 
     preferences.putInt(startKey.c_str(), timeSlots[i].startTimeMinutes);
-    Serial.printf("Saved %s: %d\n", startKey.c_str(), timeSlots[i].startTimeMinutes);
-    Serial.printf("Read back %s: %d\n", startKey.c_str(), preferences.getInt(startKey.c_str(), -99));
+    // Serial.printf("Saved %s: %d\n", startKey.c_str(), timeSlots[i].startTimeMinutes);
+    // Serial.printf("Read back %s: %d\n", startKey.c_str(), preferences.getInt(startKey.c_str(), -99)); // Optional
 
     preferences.putInt(stopKey.c_str(), timeSlots[i].stopTimeMinutes);
-    Serial.printf("Saved %s: %d\n", stopKey.c_str(), timeSlots[i].stopTimeMinutes);
-    Serial.printf("Read back %s: %d\n", stopKey.c_str(), preferences.getInt(stopKey.c_str(), -99));
+    // Serial.printf("Saved %s: %d\n", stopKey.c_str(), timeSlots[i].stopTimeMinutes);
+    // Serial.printf("Read back %s: %d\n", stopKey.c_str(), preferences.getInt(stopKey.c_str(), -99)); // Optional
   }
 
   preferences.end(); // End the session here
-  Serial.println("Timers saved to Preferences and verification read performed.");
+  Serial.println("Timers saved to Preferences.");
 }
 
 void addTimeSlot(String startTimeStr, String stopTimeStr) {
@@ -572,10 +653,12 @@ void addTimeSlot(String startTimeStr, String stopTimeStr) {
     int stopTimeMinutes = timeToMinutes(stopTimeStr);
     timeSlots[numTimeSlots].startTimeMinutes = startTimeMinutes;
     timeSlots[numTimeSlots].stopTimeMinutes = stopTimeMinutes;
+    timeSlots[numTimeSlots].active = false; // Ensure new timers are initially inactive
     numTimeSlots++; // Increment numTimeSlots FIRST
     saveTimersToPreferences(); // Now save with the updated count
+    Serial.printf("Added new timeslot. Total slots: %d. Start: %s, End: %s\n", numTimeSlots, startTimeStr.c_str(), stopTimeStr.c_str());
   } else {
-    Serial.println("Maximum number of timers reached.");
+    Serial.println("Maximum number of timers reached. Cannot add new slot.");
   }
 }
 
@@ -998,11 +1081,16 @@ void loop() {
     data["servoX_pos"] = myservoX.read();
     data["servoY_pos"] = myservoY.read();
     data["laser_active"] = digitalRead(outputPin) == HIGH;
-    data["relay_active"] = relayActive;
+    data["relay_active"] = relayActive; // relayActive is updated by RELAY_ON/OFF commands
     data["random_motion_active"] = randomMotionActive;
     data["is_scheduled_movement_active"] = isScheduledMovementActive;
     data["esp32cam_connected"] = esp32CamConnected;
     data["esp32cam_streaming"] = streaming;
+    // Add servo limits to status update
+    data["minX"] = minX;
+    data["maxX"] = maxX;
+    data["minY"] = minY;
+    data["maxY"] = maxY;
     // Add other relevant status data
 
     String output;

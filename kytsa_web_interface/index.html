@@ -23,13 +23,12 @@
                 <h3>Servos</h3>
                 <label for="servoX">Servo X:</label>
                 <input type="range" id="servoX" min="0" max="180" value="90" disabled> <span id="servoXValue">90</span><br>
+                <button id="setXMinBtn" disabled>Set X Min</button>
+                <button id="setXMaxBtn" disabled>Set X Max</button><br>
                 <label for="servoY">Servo Y:</label>
                 <input type="range" id="servoY" min="45" max="135" value="90" disabled> <span id="servoYValue">90</span><br>
-            </div>
-            <div class="control-group">
-                <h3>Laser & Relay</h3>
-                <button id="laserToggle" disabled>Toggle Laser</button><br>
-                <button id="relayToggle" disabled>Toggle Relay</button><br>
+                <button id="setYMinBtn" disabled>Set Y Min</button>
+                <button id="setYMaxBtn" disabled>Set Y Max</button><br>
             </div>
             <div class="control-group">
                 <h3>Motion</h3>
@@ -48,6 +47,19 @@
             <h2>Live Stream</h2>
             <div id="stream-container">
                 <img id="stream" src="#" alt="Live Stream Paused" width="640" height="480">
+            </div>
+        </div>
+
+        <div class="timer-controls">
+            <h2>Timer Configuration</h2>
+            <label for="timerStartTime">Start Time:</label>
+            <input type="time" id="timerStartTime" disabled><br>
+            <label for="timerEndTime">End Time:</label>
+            <input type="time" id="timerEndTime" disabled><br>
+            <button id="addTimerBtn" disabled>Add Timer</button>
+            <h3>Scheduled Timers</h3>
+            <div id="timerList">
+                <!-- Timer entries will be added here by script.js -->
             </div>
         </div>
 

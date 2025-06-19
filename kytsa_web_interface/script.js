@@ -12,9 +12,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const servoYSliderEl = document.getElementById('servoY');
     const servoYValueEl = document.getElementById('servoYValue');
 
-    const laserToggleBtn = document.getElementById('laserToggle');
-    const relayToggleBtn = document.getElementById('relayToggle');
+    // Axis configuration buttons
+    const setXMinBtn = document.getElementById('setXMinBtn');
+    const setXMaxBtn = document.getElementById('setXMaxBtn');
+    const setYMinBtn = document.getElementById('setYMinBtn');
+    const setYMaxBtn = document.getElementById('setYMaxBtn');
+
     const randomMotionToggleBtn = document.getElementById('randomMotionToggle');
+
+    // Timer controls
+    const timerStartTimeEl = document.getElementById('timerStartTime');
+    const timerEndTimeEl = document.getElementById('timerEndTime');
+    const addTimerBtn = document.getElementById('addTimerBtn');
+    const timerListEl = document.getElementById('timerList');
 
     const camStreamStartBtn = document.getElementById('camStreamStart');
     const camStreamStopBtn = document.getElementById('camStreamStop');
@@ -22,7 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const camLedOffBtn = document.getElementById('camLedOff');
 
     const allControls = [
-        servoXSliderEl, servoYSliderEl, laserToggleBtn, relayToggleBtn,
+        servoXSliderEl, servoYSliderEl,
+        setXMinBtn, setXMaxBtn, setYMinBtn, setYMaxBtn, // New axis buttons
+        timerStartTimeEl, timerEndTimeEl, addTimerBtn, // New timer controls
         randomMotionToggleBtn, camStreamStartBtn, camStreamStopBtn,
         camLedOnBtn, camLedOffBtn
     ];
@@ -111,7 +123,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (message.deviceId === selectedDeviceId) {
                         updateDeviceStatusDisplay(message.data);
-                        updateUIToggleStates(message.data);
+                        updateUIToggleStates(message.data); // Handles random motion, could update servo limits if included
+                        // If statusUpdate includes servo limits, update them (optional redundancy)
+                        if (message.data.minX !== undefined) servoXSliderEl.min = message.data.minX;
+                        if (message.data.maxX !== undefined) servoXSliderEl.max = message.data.maxX;
+                        if (message.data.minY !== undefined) servoYSliderEl.min = message.data.minY;
+                        if (message.data.maxY !== undefined) servoYSliderEl.max = message.data.maxY;
+                    }
+                    break;
+                case 'systemConfig': // New message type for initial config
+                    if (message.deviceId === selectedDeviceId) {
+                        console.log("Received systemConfig:", message.config);
+                        const config = message.config;
+                        if (config.minX !== undefined) servoXSliderEl.min = config.minX;
+                        if (config.maxX !== undefined) servoXSliderEl.max = config.maxX;
+                        if (config.minY !== undefined) servoYSliderEl.min = config.minY;
+                        if (config.maxY !== undefined) servoYSliderEl.max = config.maxY;
+
+                        // Update slider values if they are outside new limits
+                        if (parseInt(servoXSliderEl.value) < config.minX) servoXSliderEl.value = config.minX;
+                        if (parseInt(servoXSliderEl.value) > config.maxX) servoXSliderEl.value = config.maxX;
+                        if (servoXValueEl) servoXValueEl.textContent = servoXSliderEl.value;
+
+                        if (parseInt(servoYSliderEl.value) < config.minY) servoYSliderEl.value = config.minY;
+                        if (parseInt(servoYSliderEl.value) > config.maxY) servoYSliderEl.value = config.maxY;
+                        if (servoYValueEl) servoYValueEl.textContent = servoYSliderEl.value;
+
+                        if (config.timers) {
+                            displayTimers(config.timers);
+                        }
+                    }
+                    break;
+                case 'timerList': // Message type for timer updates
+                case 'scheduleUpdate': // ESP32 might send this after add/delete timer
+                     if (message.deviceId === selectedDeviceId && message.timers) {
+                        displayTimers(message.timers);
                     }
                     break;
                 case 'error':
@@ -216,9 +262,60 @@ document.addEventListener('DOMContentLoaded', () => {
      *                                 Expected keys: `laser_active`, `relay_active`, `random_motion_active`.
      */
     function updateUIToggleStates(stateData = {}) { // Default to empty object if no state
-        if (laserToggleBtn) laserToggleBtn.textContent = `Laser (${stateData.laser_active ? "ON" : "OFF"})`;
-        if (relayToggleBtn) relayToggleBtn.textContent = `Relay (${stateData.relay_active ? "ON" : "OFF"})`;
+        // Laser and Relay buttons are removed, so their logic is gone.
         if (randomMotionToggleBtn) randomMotionToggleBtn.textContent = `Random Motion (${stateData.random_motion_active ? "ON" : "OFF"})`;
+    }
+
+    /**
+     * Converts total minutes into a HH:MM formatted string.
+     * @param {number} totalMinutes - The total minutes from midnight.
+     * @returns {string} The time in HH:MM format.
+     */
+    function minutesToTime(totalMinutes) {
+        if (typeof totalMinutes !== 'number' || isNaN(totalMinutes)) {
+            return 'N/A';
+        }
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    /**
+     * Displays the list of timers and sets up delete buttons.
+     * @param {Array<Object>} timers - Array of timer objects, e.g., [{startTimeMinutes: 600, stopTimeMinutes: 720}, ...]
+     */
+    function displayTimers(timers = []) {
+        if (!timerListEl) return;
+        timerListEl.innerHTML = ''; // Clear existing timers
+
+        if (!timers || timers.length === 0) {
+            timerListEl.innerHTML = '<p>No timers scheduled.</p>';
+            return;
+        }
+
+        timers.forEach((timer, index) => {
+            const startTimeFormatted = minutesToTime(timer.startTimeMinutes);
+            const endTimeFormatted = minutesToTime(timer.stopTimeMinutes);
+            const timerDiv = document.createElement('div');
+            timerDiv.className = 'timer-entry';
+            timerDiv.innerHTML = `
+                <span>Start: ${startTimeFormatted}, End: ${endTimeFormatted}</span>
+                <button class="deleteTimerBtn" data-timer-index="${index}">Delete</button>
+            `;
+            timerListEl.appendChild(timerDiv);
+        });
+
+        // Add event listeners to new delete buttons
+        document.querySelectorAll('.deleteTimerBtn').forEach(button => {
+            button.addEventListener('click', (event) => {
+                const timerIndex = event.target.getAttribute('data-timer-index');
+                if (timerIndex !== null) {
+                    sendCommand({ command: 'deleteTimer', timerIndex: parseInt(timerIndex) });
+                    // Optionally, re-request system config or expect a timerList update
+                    // sendCommand({ command: 'getSystemConfig' });
+                }
+            });
+        });
     }
 
     /**
@@ -269,15 +366,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (selectedDeviceId) {
                 setControlsDisabled(false);
+                // Request full system config for the selected device
+                sendCommand({ command: 'getSystemConfig' });
+
+                // Initial placeholder display until config arrives
                 const currentDeviceState = deviceStates[selectedDeviceId] || {};
-                updateDeviceStatusDisplay(currentDeviceState);
-                updateUIToggleStates(currentDeviceState);
+                updateDeviceStatusDisplay(currentDeviceState); // Shows basic status if available
+                updateUIToggleStates(currentDeviceState); // For random motion toggle
+                if (timerListEl) timerListEl.innerHTML = '<p>Loading timers...</p>';
+
+
                 if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
             } else {
                 setControlsDisabled(true);
                 if (deviceStatusEl) deviceStatusEl.textContent = 'Waiting for updates...';
                 updateUIToggleStates({});
                 if (streamImgEl) streamImgEl.src = "#";
+                if (timerListEl) timerListEl.innerHTML = ''; // Clear timers when no device selected
             }
         });
     }
@@ -290,31 +395,72 @@ document.addEventListener('DOMContentLoaded', () => {
         servoYSliderEl.addEventListener('input', () => { if (servoYValueEl) servoYValueEl.textContent = servoYSliderEl.value; });
         servoYSliderEl.addEventListener('change', () => sendCommand({ command: 'servoY', value: parseInt(servoYSliderEl.value) }));
     }
-    if (laserToggleBtn) {
-        laserToggleBtn.addEventListener('click', () => {
-            const currentState = deviceStates[selectedDeviceId] ? deviceStates[selectedDeviceId].laser_active : false;
-            sendCommand({ command: currentState ? 'LASER_OFF' : 'LASER_ON' });
+
+    // Axis limit setting buttons
+    if (setXMinBtn) {
+        setXMinBtn.addEventListener('click', () => {
+            sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'min', value: parseInt(servoXSliderEl.value) });
         });
     }
-    if (relayToggleBtn) {
-        relayToggleBtn.addEventListener('click', () => {
-            const currentState = deviceStates[selectedDeviceId] ? deviceStates[selectedDeviceId].relay_active : false;
-            sendCommand({ command: currentState ? 'RELAY_OFF' : 'RELAY_ON' });
+    if (setXMaxBtn) {
+        setXMaxBtn.addEventListener('click', () => {
+            sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'max', value: parseInt(servoXSliderEl.value) });
         });
     }
+    if (setYMinBtn) {
+        setYMinBtn.addEventListener('click', () => {
+            sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'min', value: parseInt(servoYSliderEl.value) });
+        });
+    }
+    if (setYMaxBtn) {
+        setYMaxBtn.addEventListener('click', () => {
+            sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'max', value: parseInt(servoYSliderEl.value) });
+        });
+    }
+
+    // Timer management
+    if (addTimerBtn) {
+        addTimerBtn.addEventListener('click', () => {
+            const startTime = timerStartTimeEl.value;
+            const endTime = timerEndTimeEl.value;
+            if (!startTime || !endTime) {
+                alert('Please select both a start and end time for the timer.');
+                return;
+            }
+            // Basic validation: end time after start time (can be more complex if spanning midnight)
+            // For now, sending to ESP32 for more robust validation.
+            sendCommand({ command: 'addTimer', startTime: startTime, endTime: endTime });
+            // Clear input fields after attempting to add
+            // timerStartTimeEl.value = '';
+            // timerEndTimeEl.value = '';
+            // ESP32 should send back updated timer list via 'systemConfig' or 'timerList'
+        });
+    }
+
+    // Removed laserToggleBtn and relayToggleBtn event listeners
+
     if (randomMotionToggleBtn) {
-        randomMotionToggleBtn.addEventListener('click', () => sendCommand({ command: 'RANDOM_MOTION_TOGGLE' }));
+        randomMotionToggleBtn.addEventListener('click', () => {
+             // Toggle based on current known state to provide immediate UI feedback (optional)
+            const currentDeviceState = deviceStates[selectedDeviceId] || {};
+            const newRandomMotionState = !currentDeviceState.random_motion_active;
+            sendCommand({ command: 'RANDOM_MOTION_TOGGLE' }); // ESP32 handles actual toggle
+            // Optimistically update UI, will be corrected by statusUpdate if needed
+            if (deviceStates[selectedDeviceId]) deviceStates[selectedDeviceId].random_motion_active = newRandomMotionState;
+            updateUIToggleStates({ random_motion_active: newRandomMotionState });
+        });
     }
     if (camStreamStartBtn) {
         camStreamStartBtn.addEventListener('click', () => {
             sendCommand({ command: 'START_STREAM' });
+            // src is already set in deviceSelect 'change' handler, but this ensures it if called independently
             if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
         });
     }
     if (camStreamStopBtn) {
         camStreamStopBtn.addEventListener('click', () => {
             sendCommand({ command: 'STOP_STREAM' });
-            if (streamImgEl) streamImgEl.src = "#";
+            if (streamImgEl) streamImgEl.src = "#"; // Set to placeholder or hash
         });
     }
     if (camLedOnBtn) {
