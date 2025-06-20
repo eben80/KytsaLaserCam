@@ -529,28 +529,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // NEW EXPERIMENTAL command object structure for addTimer
-            const experimentalAddTimerCommandObject = {
-                type: "command", // Keep type for consistency with other commands
-                targetDeviceId: selectedDeviceId, // Keep for consistency
-                command: "addTimer_data", // New command name
-                data: startTimeValue + ";" + endTimeValue // Combine times into a single string
+            // HYPER-SIMPLIFIED command object structure for addTimer diagnostic
+            const hyperSimplifiedCommandObject = {
+                c: "at", // "c" for command, "at" for addTimer
+                d: startTimeValue + ";" + endTimeValue // "d" for data
             };
 
             if (socket && socket.readyState === WebSocket.OPEN) {
-                const messagePayloadString = JSON.stringify(experimentalAddTimerCommandObject);
+                const messagePayloadString = JSON.stringify(hyperSimplifiedCommandObject);
 
-                // Update log message to reflect the experimental structure
-                console.log('[DEBUG] ADD_TIMER_BTN: Preparing to send stringified (EXPERIMENTAL data string structure) payload:', messagePayloadString);
+                // Update log message to reflect the HYPER-SIMPLIFIED structure
+                console.log('[DEBUG] ADD_TIMER_BTN: Preparing to send stringified (HYPER-SIMPLIFIED structure) payload:', messagePayloadString);
                 console.log('[DEBUG] ADD_TIMER_BTN: WebSocket readyState before send:', socket.readyState);
                 console.log('[DEBUG] ADD_TIMER_BTN: WebSocket bufferedAmount before send:', socket.bufferedAmount);
 
                 try {
                     socket.send(messagePayloadString);
-                    console.log('[DEBUG] ADD_TIMER_BTN: socket.send() EXECUTED for addTimer_data (EXPERIMENTAL structure) command.');
+                    console.log('[DEBUG] ADD_TIMER_BTN: socket.send() EXECUTED for addTimer (HYPER-SIMPLIFIED structure) command.');
                 } catch (e) {
                     console.error('[ERROR] ADD_TIMER_BTN: socket.send() FAILED with exception:', e);
-                    alert('Failed to send addTimer_data command. Check console for errors.');
+                    alert('Failed to send addTimer (hyper-simplified) command. Check console for errors.');
                 }
 
                 // TEMPORARILY COMMENT OUT any automatic refresh/getSystemConfig call
@@ -562,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // // }
 
             } else {
-                alert('WebSocket not connected or not open. Cannot send addTimer_data command.');
+                alert('WebSocket not connected or not open. Cannot send addTimer (hyper-simplified) command.');
                 console.error('[ERROR] ADD_TIMER_BTN: WebSocket not connected or not open. Current readyState:', socket ? socket.readyState : 'socket is null');
             }
 

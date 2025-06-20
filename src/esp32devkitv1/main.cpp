@@ -239,45 +239,41 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     return;
                 }
 
-                // Reverted: Standard command handling using "command" key
-                if (doc.containsKey("command")) {
-                    const char* command = doc["command"];
-                    Serial.printf("[DEBUG] Received standard command: %s\n", command);
-
-                    // Experimental addTimer_data handler
-                    if (strcmp(command, "addTimer_data") == 0) {
-                        Serial.println("[DEBUG] Received 'addTimer_data' (experimental structure) command.");
-                        const char* dataStr = doc["data"];
-                        if (dataStr) {
-                            String combinedData = String(dataStr);
-                            int semicolonIndex = combinedData.indexOf(';');
-                            if (semicolonIndex > 0 && semicolonIndex < combinedData.length() - 1) {
-                                String startTimeFromData = combinedData.substring(0, semicolonIndex);
-                                String endTimeFromData = combinedData.substring(semicolonIndex + 1);
-                                Serial.printf("[DEBUG] Parsed from 'data' string -> startTime: %s, endTime: %s\n", startTimeFromData.c_str(), endTimeFromData.c_str());
-                                addTimeSlot(startTimeFromData, endTimeFromData);
-                            } else {
-                                Serial.println("[DEBUG] 'addTimer_data' invalid 'data' field format. Expected 'HH:MM;HH:MM'.");
-                            }
+                // HANDLER FOR HYPER-SIMPLIFIED JSON: { "c": "at", "d": "HH:MM;HH:MM" }
+                if (doc.containsKey("c") && strcmp(doc["c"], "at") == 0) {
+                    Serial.println("[DEBUG] Received 'addTimer' (HYPER-SIMPLIFIED 'c':'at') command.");
+                    const char* dataStr = doc["d"]; // "d" for data
+                    if (dataStr) {
+                        String combinedData = String(dataStr);
+                        int semicolonIndex = combinedData.indexOf(';');
+                        if (semicolonIndex > 0 && semicolonIndex < combinedData.length() - 1) {
+                            String startTimeFromData = combinedData.substring(0, semicolonIndex);
+                            String endTimeFromData = combinedData.substring(semicolonIndex + 1);
+                            Serial.printf("[DEBUG] Parsed from 'd' string -> startTime: %s, endTime: %s\n", startTimeFromData.c_str(), endTimeFromData.c_str());
+                            addTimeSlot(startTimeFromData, endTimeFromData);
                         } else {
-                            Serial.println("[DEBUG] 'addTimer_data' missing 'data' field.");
+                            Serial.println("[DEBUG] Hyper-simplified 'addTimer' invalid 'd' field format. Expected 'HH:MM;HH:MM'.");
                         }
-                        sendSystemConfig(); // Update client
+                    } else {
+                        Serial.println("[DEBUG] Hyper-simplified 'addTimer' missing 'd' field.");
                     }
-                    // Original addTimer handler (now deprecated/bypassed if addTimer_data is used)
-                    else if (strcmp(command, "addTimer") == 0) {
-                        Serial.println("[DEBUG] Original 'addTimer' handler called - THIS IS NOW DEPRECATED/BYPASSED if addTimer_data is used.");
-                        // const char* startTimeStr = doc["startTime"];
-                        // const char* endTimeStr = doc["endTime"];
+                    sendSystemConfig(); // Update client
 
-                        // if (startTimeStr && endTimeStr) {
-                        //     Serial.printf("[DEBUG] Parsed startTime: %s, endTime: %s from WebSocket (original structure)\n", startTimeStr, endTimeStr);
-                        //     addTimeSlot(String(startTimeStr), String(endTimeStr));
-                        // } else {
-                        //     Serial.println("[DEBUG] 'addTimer' (original structure) missing startTime or endTime fields.");
-                        // }
-                        // sendSystemConfig();
-                    } else if (strcmp(command, "servoX") == 0) {
+                // Fallback to standard command structure if "c":"at" is not found
+                } else if (doc.containsKey("command")) {
+                    const char* command = doc["command"];
+                    Serial.printf("[DEBUG] Received standard command: %s (Note: 'addTimer' via this path is deprecated for hyper-simplified test)\n", command);
+
+                    // Temporarily disable or ensure other addTimer handlers don't conflict
+                    if (strcmp(command, "addTimer_data") == 0) {
+                        Serial.println("[DEBUG] 'addTimer_data' handler called - SHOULD BE DISABLED FOR HYPER-SIMPLIFIED TEST.");
+                        // Body of addTimer_data commented or removed for this test
+                    } else if (strcmp(command, "addTimer") == 0) {
+                        Serial.println("[DEBUG] Original verbose 'addTimer' handler called - SHOULD BE DISABLED FOR HYPER-SIMPLIFIED TEST.");
+                        // Body of original addTimer commented or removed for this test
+                    }
+                    // Keep other standard commands active:
+                    else if (strcmp(command, "servoX") == 0) {
                         int val = doc["value"];
                         myservoX.write(val);
                         valueStringX = String(val);
@@ -344,8 +340,6 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
                         sendSystemConfig();
                     }
-                    // The old "addTimer" handler that checked for command == "addTimer" is now removed.
-                    // Payloads with "command":"addTimer" (if sent by an old client) will fall into the "Unknown standard command" log.
                     else if (strcmp(command, "deleteTimer") == 0) {
                         int timerIndex = doc["timerIndex"];
                         Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
@@ -355,7 +349,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         Serial.printf("[DEBUG] Unknown standard command: %s\n", command);
                     }
                 } else {
-                    Serial.println("[WSc] Received JSON without 'cmd' or 'command' key.");
+                    Serial.println("[WSc] Received JSON without 'c' (for 'at') or 'command' key.");
                 }
             }
             break;
