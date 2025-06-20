@@ -263,16 +263,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         }
                         sendSystemConfig(); // Update client
 
-                    // Ensure previous addTimer handlers are disabled
-                    } else if (strcmp(command, "addTimer_data") == 0) {
-                        Serial.println("[DEBUG] 'addTimer_data' handler called - SHOULD BE DISABLED.");
-                        // Body commented out or removed
-                        sendSystemConfig(); // Still send config back if it's hit, to show no change
-                    } else if (strcmp(command, "addTimer") == 0) {
-                        Serial.println("[DEBUG] Original verbose 'addTimer' handler called - SHOULD BE DISABLED.");
-                        // Body commented out or removed
-                        sendSystemConfig(); // Still send config back
-                    }
+                    // Deprecated addTimer handlers fully removed.
                     // Standard commands:
                     else if (strcmp(command, "servoX") == 0) {
                         int val = doc["value"];
@@ -1173,7 +1164,8 @@ void loop() {
     String fullTime = getFormattedTime(); // This is HH:MM:SS
     String currentTimeForLogic = fullTime.substring(0, 5); // Should be HH:MM
 
-    // Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str()); // Line is now commented
+    // Ensure NTP debug log is commented or removed
+    // Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
 
     int currentMinutes = timeToMinutes(currentTimeForLogic);
 

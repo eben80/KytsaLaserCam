@@ -553,13 +553,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Failed to send addTimer_value command. Check console for errors.');
                 }
 
-                // TEMPORARILY COMMENT OUT any automatic refresh/getSystemConfig call
-                // that might have been here or in the sendCommand function for the addTimer case.
-                // Example:
-                // // if (typeof getSystemConfig === 'function') { // Assuming getSystemConfig is not a global function
-                // //    console.log('[DEBUG] ADD_TIMER_BTN: Intentionally NOT calling getSystemConfig post-send for this test.');
-                // //    // sendCommand({ command: 'getSystemConfig' }); // If getSystemConfig itself uses sendCommand
-                // // }
+                // Note: ESP32 should send back updated timer list via 'systemConfig' or 'scheduleUpdate'
+                // after processing the addTimer_value command. Client relies on this update.
 
             } else {
                 alert('WebSocket not connected or not open. Cannot send addTimer_value command.');
