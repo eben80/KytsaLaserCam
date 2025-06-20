@@ -772,28 +772,57 @@ void sendSystemConfig() {
 }
 
 void saveTimersToPreferences() {
-  Serial.println("[DEBUG] saveTimersToPreferences called.");
-  preferences.begin("servo_config", false); // Begin the session here, non-read-only
+  preferences.begin("servo_config", false); // false for read/write
 
-  Serial.printf("[DEBUG] Saving num_timers in saveTimersToPreferences: %d\n", numTimeSlots);
-  preferences.putInt("num_timers", numTimeSlots);
-  // Serial.printf("Read back num_timers: %d\n", preferences.getInt("num_timers", -99)); // Optional: Verification
+  // Store the current numTimeSlots that we are about to save.
+  // This is the count of *active* timers.
+  int activeTimeSlotsCount = numTimeSlots;
 
-  for (int i = 0; i < numTimeSlots; i++) {
+  preferences.putInt("num_timers", activeTimeSlotsCount);
+  Serial.printf("[DEBUG] saveTimers: Saving num_timers (active count): %d\n", activeTimeSlotsCount);
+
+  // Save only the active timers based on the current state of the timeSlots array
+  for (int i = 0; i < activeTimeSlotsCount; i++) {
     String startKey = "timer_" + String(i) + "_start";
     String stopKey = "timer_" + String(i) + "_stop";
-    Serial.printf("[DEBUG] Saving timer %d to Prefs: Start=%d, Stop=%d\n", i, timeSlots[i].startTimeMinutes, timeSlots[i].stopTimeMinutes);
-    preferences.putInt(startKey.c_str(), timeSlots[i].startTimeMinutes);
-    // Serial.printf("Saved %s: %d\n", startKey.c_str(), timeSlots[i].startTimeMinutes);
-    // Serial.printf("Read back %s: %d\n", startKey.c_str(), preferences.getInt(startKey.c_str(), -99)); // Optional
 
-    preferences.putInt(stopKey.c_str(), timeSlots[i].stopTimeMinutes);
-    // Serial.printf("Saved %s: %d\n", stopKey.c_str(), timeSlots[i].stopTimeMinutes);
-    // Serial.printf("Read back %s: %d\n", stopKey.c_str(), preferences.getInt(stopKey.c_str(), -99)); // Optional
+    // Ensure we are saving valid data from the timeSlots array for the active slots
+    if (timeSlots[i].startTimeMinutes != -1 && timeSlots[i].stopTimeMinutes != -1 && timeSlots[i].startTimeMinutes != timeSlots[i].stopTimeMinutes) {
+        preferences.putInt(startKey.c_str(), timeSlots[i].startTimeMinutes);
+        preferences.putInt(stopKey.c_str(), timeSlots[i].stopTimeMinutes);
+        Serial.printf("[DEBUG] saveTimers: Saved Timer %d to Prefs: Start=%d, Stop=%d\n", i, timeSlots[i].startTimeMinutes, timeSlots[i].stopTimeMinutes);
+    } else {
+        // This case means an invalid timer exists within the active range.
+        // This should ideally be prevented by addTimeSlot and loading logic.
+        // If found, remove its keys to clean up.
+        Serial.printf("[DEBUG] saveTimers: Timer %d in active range (0 to %d-1) was invalid (Start:%d, Stop:%d). Removing its keys from Prefs.\n", i, activeTimeSlotsCount, timeSlots[i].startTimeMinutes, timeSlots[i].stopTimeMinutes);
+        if (preferences.isKey(startKey.c_str())) {
+            preferences.remove(startKey.c_str());
+        }
+        if (preferences.isKey(stopKey.c_str())) {
+            preferences.remove(stopKey.c_str());
+        }
+    }
   }
 
-  preferences.end(); // End the session here
-  Serial.println("Timers saved to Preferences.");
+  // Explicitly remove keys for any timer slots beyond the new activeTimeSlotsCount, up to MAX_TIMERS.
+  // This cleans up stale data in NVS if numTimeSlots has decreased (e.g., after a deletion).
+  for (int i = activeTimeSlotsCount; i < MAX_TIMERS; i++) {
+    String startKey = "timer_" + String(i) + "_start";
+    String stopKey = "timer_" + String(i) + "_stop";
+
+    if (preferences.isKey(startKey.c_str())) {
+        preferences.remove(startKey.c_str());
+        Serial.printf("[DEBUG] saveTimers: Removed stale key %s from Prefs for slot %d.\n", startKey.c_str(), i);
+    }
+    if (preferences.isKey(stopKey.c_str())) {
+        preferences.remove(stopKey.c_str());
+        Serial.printf("[DEBUG] saveTimers: Removed stale key %s from Prefs for slot %d.\n", stopKey.c_str(), i);
+    }
+  }
+
+  preferences.end(); // This should commit all changes (puts and removes)
+  Serial.println("[DEBUG] Timers saved to Preferences (with cleanup of stale slots).");
 }
 
 void addTimeSlot(String startTimeStr, String stopTimeStr) {
