@@ -265,7 +265,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
                     // Deprecated addTimer handlers fully removed.
                     // Standard commands:
-                      } else if (strcmp(command, "servoX") == 0) {
+                    else if (strcmp(command, "servoX") == 0) {
                         int val = doc["value"];
                         myservoX.write(val);
                         valueStringX = String(val);
@@ -318,19 +318,20 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     } else if (strcmp(command, "setServoLimit") == 0) {
                         const char* axis = doc["axis"];
                         const char* limit_type = doc["limit_type"];
-                        int value = doc["value"];
-                        Serial.printf("Received setServoLimit: axis=%s, type=%s, value=%d\n", axis, limit_type, value);
-                        preferences.begin("servo_config", false);
-                        if (strcmp(axis, "x") == 0) {
-                            if (strcmp(limit_type, "min") == 0) { minX = value; preferences.putInt("min_x", minX); }
-                            else if (strcmp(limit_type, "max") == 0) { maxX = value; preferences.putInt("max_x", maxX); }
-                        } else if (strcmp(axis, "y") == 0) {
-                            if (strcmp(limit_type, "min") == 0) { minY = value; preferences.putInt("min_y", minY); }
-                            else if (strcmp(limit_type, "max") == 0) { maxY = value; preferences.putInt("max_y", maxY); }
+                        int value = doc["value"]; // Assuming value is passed as int
+                        if (axis && limit_type) { // Basic null check
+                            Serial.printf("Received setServoLimit: axis=%s, type=%s, value=%d\n", axis, limit_type, value);
+                            preferences.begin("servo_config", false);
+                            if (strcmp(axis, "x") == 0 && strcmp(limit_type, "min") == 0) { minX = value; preferences.putInt("min_x", minX); }
+                            else if (strcmp(axis, "x") == 0 && strcmp(limit_type, "max") == 0) { maxX = value; preferences.putInt("max_x", maxX); }
+                            else if (strcmp(axis, "y") == 0 && strcmp(limit_type, "min") == 0) { minY = value; preferences.putInt("min_y", minY); }
+                            else if (strcmp(axis, "y") == 0 && strcmp(limit_type, "max") == 0) { maxY = value; preferences.putInt("max_y", maxY); }
+                            preferences.end();
+                            Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
+                            sendSystemConfig(); // Send updated config
+                        } else {
+                             Serial.println("[ERROR] setServoLimit: missing axis or limit_type.");
                         }
-                        preferences.end();
-                        Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
-                        sendSystemConfig();
                     }
                     else if (strcmp(command, "deleteTimer") == 0) {
                         int timerIndex = doc["timerIndex"];
