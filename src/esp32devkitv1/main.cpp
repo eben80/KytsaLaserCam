@@ -265,7 +265,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
                     // Deprecated addTimer handlers fully removed.
                     // Standard commands:
-                    else if (strcmp(command, "servoX") == 0) {
+                      } else if (strcmp(command, "servoX") == 0) {
                         int val = doc["value"];
                         myservoX.write(val);
                         valueStringX = String(val);
