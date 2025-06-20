@@ -265,7 +265,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
                     // Deprecated addTimer handlers fully removed.
                     // Standard commands:
-                       } else if (strcmp(command, "servoX") == 0) {
+                    else if (strcmp(command, "servoX") == 0) {
                         int val = doc["value"];
                         myservoX.write(val);
                         valueStringX = String(val);
@@ -728,34 +728,46 @@ showBongoCat();
  */
 void sendSystemConfig() {
     if (!webSocketConnected) {
-        Serial.println("Cannot send system config, WebSocket not connected.");
+        Serial.println("[sendSystemConfig] WebSocket not connected. Cannot send config.");
         return;
     }
 
-    StaticJsonDocument<768> doc; // Adjusted size for system config
+    StaticJsonDocument<768> doc; // Existing size, should be okay for one more field
+
+    // Add deviceId to the message at the top level
     doc["type"] = "systemConfig";
+    doc["deviceId"] = deviceId; // <--- ENSURE THIS LINE IS PRESENT AND CORRECT
 
-    JsonObject config = doc.createNestedObject("config");
-    config["minX"] = minX;
-    config["maxX"] = maxX;
-    config["minY"] = minY;
-    config["maxY"] = maxY;
+    // Nest the actual configuration data under a 'config' key
+    JsonObject config_obj = doc.createNestedObject("config"); // Renamed to avoid conflict if 'config' is a global
+    config_obj["minX"] = minX;
+    config_obj["maxX"] = maxX;
+    config_obj["minY"] = minY;
+    config_obj["maxY"] = maxY;
+    // config_obj["cam_led_active"] = camLedActive; // Optional: cam_led_active is in statusUpdate primarily
 
-    JsonArray timersArray = config.createNestedArray("timers");
+    JsonArray timersArray = config_obj.createNestedArray("timers");
     for (int i = 0; i < numTimeSlots; i++) {
-        JsonObject timer = timersArray.createNestedObject();
-        timer["startTimeMinutes"] = timeSlots[i].startTimeMinutes;
-        timer["stopTimeMinutes"] = timeSlots[i].stopTimeMinutes;
-        // 'active' field is mostly for internal ESP32 logic, not usually sent to client here
-        // but can be added if client needs to know raw 'active' state from struct.
+        if (timeSlots[i].startTimeMinutes != -1 && timeSlots[i].stopTimeMinutes != -1) {
+            JsonObject timer = timersArray.createNestedObject();
+            timer["startTimeMinutes"] = timeSlots[i].startTimeMinutes;
+            timer["stopTimeMinutes"] = timeSlots[i].stopTimeMinutes;
+        }
     }
 
     String output;
     serializeJson(doc, output);
+
+    // Existing debug logs
     Serial.println("[DEBUG] Attempting to send systemConfig via WebSocket.");
     Serial.println("JSON to send: " + output);
-    webSocket.sendTXT(output);
-    // Serial.println("Sent systemConfig: " + output); // Original log, can be removed or kept
+
+    bool sent = webSocket.sendTXT(output);
+    if (sent) {
+        Serial.println("[DEBUG] systemConfig message sent successfully to WebSocket server.");
+    } else {
+        Serial.println("[ERROR] Failed to send systemConfig message to WebSocket server!");
+    }
 }
 
 void saveTimersToPreferences() {

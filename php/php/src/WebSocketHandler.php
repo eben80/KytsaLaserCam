@@ -123,6 +123,24 @@ class WebSocketHandler implements MessageComponentInterface {
                         $this->broadcastToWebUI($statusData);
                     }
                     break;
+
+                // ADD THIS NEW CASE:
+                case 'systemConfig':
+                    if (isset($this->esp32Devices[$from->resourceId]) && isset($data['config'])) {
+                        // Message is from a known ESP32 device and has a 'config' payload
+                        $deviceId = $this->esp32Devices[$from->resourceId];
+                        $systemConfigData = [
+                            'type' => 'systemConfig', // Keep original type
+                            'deviceId' => $deviceId,    // Add deviceId for client-side filtering
+                            'config' => $data['config'] // The original config object from ESP32
+                        ];
+                        $this->broadcastToWebUI($systemConfigData);
+                        echo "Relayed systemConfig from device {$deviceId} (conn {$from->resourceId}) to Web UIs.\n";
+                    } else {
+                        echo "Received systemConfig but either sender is not a known ESP32 or 'config' payload is missing. Message: {$msg}\n";
+                    }
+                    break;
+
                 case 'command':
                     if (isset($data['targetDeviceId']) && isset($data['command'])) {
                         $targetDeviceId = $data['targetDeviceId'];
@@ -157,11 +175,11 @@ class WebSocketHandler implements MessageComponentInterface {
                     }
                     break;
                 default:
-                    echo "Unknown message type: {$data['type']}\n";
+                    echo "Unknown message type: {$data['type']} from connection {$from->resourceId}\n"; // Added connection ID for clarity
                     break;
             }
         } else {
-             echo "Received non-JSON or non-typed message: {$msg}\n";
+             echo "Received non-JSON or non-typed message from connection {$from->resourceId}: {$msg}\n"; // Added connection ID
         }
     }
 
