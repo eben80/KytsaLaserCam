@@ -419,16 +419,16 @@ document.addEventListener('DOMContentLoaded', () => {
             let messageToSend;
 
             if (commandData.command === 'addTimer') {
-                // Explicitly construct the message for addTimer
+                // NEW TEMPORARY SIMPLIFIED PAYLOAD for addTimer:
                 messageToSend = {
-                    type: 'command',
-                    targetDeviceId: selectedDeviceId,
-                    command: 'addTimer', // This is the command string for the ESP32
-                    startTime: commandData.startTime,
-                    endTime: commandData.endTime
+                    cmd: "at", // Short for command: addTimer
+                    sT: commandData.startTime,
+                    eT: commandData.endTime
+                    // type and targetDeviceId are intentionally omitted for this specific command
                 };
+                // console.log('[DEBUG] addTimer: Using simplified payload for sending.'); // Keep if needed, or remove if final
             } else {
-                // For all other commands, the existing spread logic can be used
+                // For all other commands, the existing logic
                 messageToSend = {
                     type: 'command',
                     targetDeviceId: selectedDeviceId,
@@ -437,9 +437,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const messagePayloadString = JSON.stringify(messageToSend);
+            // The [DEBUG] log for stringified payload is already in place from previous step.
             console.log('[DEBUG] Refactored Send: Sending WebSocket message (stringified):', messagePayloadString);
-
             socket.send(messagePayloadString);
+
         } else {
             alert('WebSocket not connected. Please wait or try refreshing.');
         }

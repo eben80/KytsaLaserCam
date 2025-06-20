@@ -199,13 +199,16 @@ void deleteTimeSlot(int indexToDelete); // Ensure it's declared
  * @param length The length of the payload.
  */
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
+    // Add a Serial.printf at the top to see ALL event types coming in
+    // Serial.printf("[WSc] Event Type Received: %d\n", type);
+
     switch(type) {
         case WStype_DISCONNECTED:
-            Serial.printf("[WSc] Disconnected!\n");
+            Serial.printf("[WSc] Event: WStype_DISCONNECTED\n");
             webSocketConnected = false;
             break;
         case WStype_CONNECTED:
-            Serial.printf("[WSc] Connected to url: %s\n", (char*)payload);
+            Serial.printf("[WSc] Event: WStype_CONNECTED to %s\n", (char*)payload);
             webSocketConnected = true;
             // Send pairing message
             {
@@ -221,12 +224,10 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             }
             break;
         case WStype_TEXT:
-            // ADD THESE LINES:
-            Serial.printf("[WSc] Raw payload received: %s\n", (char*)payload);
-            Serial.printf("[WSc] Payload length: %u\n", length);
-            // END OF ADDED LINES
-
-            Serial.printf("[WSc] get text: %s\n", (char*)payload); // This line was already there from user log, keep it for consistency or remove if redundant with new raw log
+            Serial.printf("[WSc] Event: WStype_TEXT\n"); // Log that we entered TEXT handling
+            Serial.printf("[WSc] Raw payload received (for WStype_TEXT): %s\n", (char*)payload); // Moved from top of TEXT block
+            Serial.printf("[WSc] Payload length (for WStype_TEXT): %u\n", length);    // Moved from top of TEXT block
+            // The old "[WSc] get text:" log is redundant if "Raw payload received" is here.
 
             // Existing code follows
             {
@@ -238,117 +239,143 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     return;
                 }
 
-                const char* command = doc["command"]; // e.g., "servoX", "ledOn"
+                // Standard handling for simplified addTimer (cmd: "at")
+                if (doc.containsKey("cmd") && strcmp(doc["cmd"], "at") == 0) {
+                    Serial.println("[DEBUG] Received 'addTimer' (cmd: 'at') command.");
+                    const char* startTimeStr = doc["sT"]; // Using "sT" as key
+                    const char* endTimeStr = doc["eT"];   // Using "eT" as key
 
-                if (strcmp(command, "servoX") == 0) {
-                    int val = doc["value"];
-                    myservoX.write(val);
-                    valueStringX = String(val); // Update for display if any part of OLED remains
-                    Serial.printf("Executed servoX: %d\n", val);
-                    // Optionally send back a status update
-                } else if (strcmp(command, "servoY") == 0) {
-                    int val = doc["value"];
-                    myservoY.write(val);
-                    valueStringY = String(val);
-                    Serial.printf("Executed servoY: %d\n", val);
-                } else if (strcmp(command, "LASER_ON") == 0) {
-                    turnLaserOn();
-                    Serial.println("Executed LASER_ON");
-                } else if (strcmp(command, "LASER_OFF") == 0) {
-                    turnLaserOff();
-                    Serial.println("Executed LASER_OFF");
-                } else if (strcmp(command, "RELAY_ON") == 0) {
-                    digitalWrite(relayPin, HIGH);
-                    relayActive = true;
-                    Serial.println("Executed RELAY_ON");
-                } else if (strcmp(command, "RELAY_OFF") == 0) {
-                    digitalWrite(relayPin, LOW);
-                    relayActive = false;
-                    Serial.println("Executed RELAY_OFF");
-                } else if (strcmp(command, "RANDOM_MOTION_TOGGLE") == 0) {
-                    randomMotionActive = !randomMotionActive;
-                     Serial.printf("Random motion toggled: %s\n", randomMotionActive ? "ON" : "OFF");
-                }
-                // Commands for ESP32CAM
-                else if (strcmp(command, "START_STREAM") == 0) {
-                    Serial2.println("START_STREAM");
-                    Serial.println("Sent command to ESP32CAM: START_STREAM");
-                    streaming = true;
-                } else if (strcmp(command, "STOP_STREAM") == 0) {
-                    Serial2.println("STOP_STREAM");
-                    Serial.println("Sent command to ESP32CAM: STOP_STREAM");
-                    streaming = false;
-                } else if (strcmp(command, "CAM_LED_ON") == 0) {
-                    Serial2.println("LED_ON");
-                    Serial.println("Sent command to ESP32CAM: LED_ON");
-                    camLedActive = true;
-                } else if (strcmp(command, "CAM_LED_OFF") == 0) {
-                    Serial2.println("LED_OFF");
-                    Serial.println("Sent command to ESP32CAM: LED_OFF");
-                    camLedActive = false;
-                } else if (strcmp(command, "getSystemConfig") == 0) {
-                    Serial.println("[DEBUG] Received 'getSystemConfig' command.");
-                    Serial.println("[DEBUG] Calling sendSystemConfig for getSystemConfig command.");
-                    sendSystemConfig();
-                } else if (strcmp(command, "setServoLimit") == 0) {
-                    const char* axis = doc["axis"]; // "x" or "y"
-                    const char* limit_type = doc["limit_type"]; // "min" or "max"
-                    int value = doc["value"];
-                    Serial.printf("Received setServoLimit: axis=%s, type=%s, value=%d\n", axis, limit_type, value);
-
-                    preferences.begin("servo_config", false);
-                    if (strcmp(axis, "x") == 0) {
-                        if (strcmp(limit_type, "min") == 0) {
-                            minX = value;
-                            preferences.putInt("min_x", minX);
-                        } else if (strcmp(limit_type, "max") == 0) {
-                            maxX = value;
-                            preferences.putInt("max_x", maxX);
-                        }
-                    } else if (strcmp(axis, "y") == 0) {
-                        if (strcmp(limit_type, "min") == 0) {
-                            minY = value;
-                            preferences.putInt("min_y", minY);
-                        } else if (strcmp(limit_type, "max") == 0) {
-                            maxY = value;
-                            preferences.putInt("max_y", maxY);
-                        }
+                    if (startTimeStr && endTimeStr) {
+                        Serial.printf("[DEBUG] Parsed sT: %s, eT: %s from WebSocket\n", startTimeStr, endTimeStr);
+                        addTimeSlot(String(startTimeStr), String(endTimeStr));
+                    } else {
+                        Serial.println("[DEBUG] 'addTimer' (cmd: 'at') missing sT or eT fields.");
                     }
-                    preferences.end();
-                    Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
-                    sendSystemConfig(); // Send updated config back
-                } else if (strcmp(command, "addTimer") == 0) {
-                    Serial.println("[DEBUG] Received 'addTimer' command.");
-                    String startTime = doc["startTime"].as<String>(); // "HH:MM"
-                    String endTime = doc["endTime"].as<String>();   // "HH:MM"
-                    Serial.printf("[DEBUG] Parsed startTime: %s, endTime: %s from WebSocket\n", startTime.c_str(), endTime.c_str());
-                    Serial.println("[DEBUG] Calling addTimeSlot from webSocketEvent.");
-                    addTimeSlot(startTime, endTime);
-                    Serial.println("[DEBUG] Calling sendSystemConfig after addTimer.");
-                    sendSystemConfig(); // Send updated config back
-                } else if (strcmp(command, "deleteTimer") == 0) {
-                    int timerIndex = doc["timerIndex"];
-                    Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
-                    deleteTimeSlot(timerIndex);
-                    sendSystemConfig(); // Send updated config back
+                    sendSystemConfig();
+
+                } else if (doc.containsKey("command")) { // Handle other existing commands
+                    const char* command = doc["command"];
+                    Serial.printf("[DEBUG] Received standard command: %s\n", command);
+
+                    if (strcmp(command, "servoX") == 0) {
+                        int val = doc["value"];
+                        myservoX.write(val);
+                        valueStringX = String(val);
+                        Serial.printf("Executed servoX: %d\n", val);
+                    } else if (strcmp(command, "servoY") == 0) {
+                        int val = doc["value"];
+                        myservoY.write(val);
+                        valueStringY = String(val);
+                        Serial.printf("Executed servoY: %d\n", val);
+                    } else if (strcmp(command, "LASER_ON") == 0) {
+                        turnLaserOn();
+                        Serial.println("Executed LASER_ON");
+                    } else if (strcmp(command, "LASER_OFF") == 0) {
+                        turnLaserOff();
+                        Serial.println("Executed LASER_OFF");
+                    } else if (strcmp(command, "RELAY_ON") == 0) {
+                        digitalWrite(relayPin, HIGH);
+                        relayActive = true;
+                        Serial.println("Executed RELAY_ON");
+                    } else if (strcmp(command, "RELAY_OFF") == 0) {
+                        digitalWrite(relayPin, LOW);
+                        relayActive = false;
+                        Serial.println("Executed RELAY_OFF");
+                    } else if (strcmp(command, "RANDOM_MOTION_TOGGLE") == 0) {
+                        randomMotionActive = !randomMotionActive;
+                        Serial.printf("Random motion toggled: %s\n", randomMotionActive ? "ON" : "OFF");
+                    }
+                    // Commands for ESP32CAM
+                    else if (strcmp(command, "START_STREAM") == 0) {
+                        Serial2.println("START_STREAM");
+                        Serial.println("Sent command to ESP32CAM: START_STREAM");
+                        streaming = true;
+                    } else if (strcmp(command, "STOP_STREAM") == 0) {
+                        Serial2.println("STOP_STREAM");
+                        Serial.println("Sent command to ESP32CAM: STOP_STREAM");
+                        streaming = false;
+                    } else if (strcmp(command, "CAM_LED_ON") == 0) {
+                        Serial2.println("LED_ON");
+                        Serial.println("Sent command to ESP32CAM: LED_ON");
+                        camLedActive = true;
+                    } else if (strcmp(command, "CAM_LED_OFF") == 0) {
+                        Serial2.println("LED_OFF");
+                        Serial.println("Sent command to ESP32CAM: LED_OFF");
+                        camLedActive = false;
+                    } else if (strcmp(command, "getSystemConfig") == 0) {
+                        Serial.println("[DEBUG] Received 'getSystemConfig' command.");
+                        Serial.println("[DEBUG] Calling sendSystemConfig for getSystemConfig command.");
+                        sendSystemConfig();
+                    } else if (strcmp(command, "setServoLimit") == 0) {
+                        const char* axis = doc["axis"];
+                        const char* limit_type = doc["limit_type"];
+                        int value = doc["value"];
+                        Serial.printf("Received setServoLimit: axis=%s, type=%s, value=%d\n", axis, limit_type, value);
+
+                        preferences.begin("servo_config", false);
+                        if (strcmp(axis, "x") == 0) {
+                            if (strcmp(limit_type, "min") == 0) { minX = value; preferences.putInt("min_x", minX); }
+                            else if (strcmp(limit_type, "max") == 0) { maxX = value; preferences.putInt("max_x", maxX); }
+                        } else if (strcmp(axis, "y") == 0) {
+                            if (strcmp(limit_type, "min") == 0) { minY = value; preferences.putInt("min_y", minY); }
+                            else if (strcmp(limit_type, "max") == 0) { maxY = value; preferences.putInt("max_y", maxY); }
+                        }
+                        preferences.end();
+                        Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
+                        sendSystemConfig();
+                    }
+                    // Old "addTimer" handler (using "command":"addTimer") is now effectively removed
+                    // as the "cmd":"at" structure is the standard.
+                    // If a message with "command":"addTimer" arrives, it will fall into the unknown command log below.
+                    else if (strcmp(command, "deleteTimer") == 0) {
+                        int timerIndex = doc["timerIndex"];
+                        Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
+                        deleteTimeSlot(timerIndex);
+                        sendSystemConfig();
+                    } else {
+                        Serial.printf("[WSc] Unknown standard command: %s\n", command);
+                    }
+                } else {
+                    Serial.println("[WSc] Received JSON without 'cmd' or 'command' key.");
                 }
-                // Add more command handlers as needed
             }
             break;
         case WStype_BIN:
             Serial.printf("[WSc] get binary length: %u\n", length);
-            // hexdump(payload, length); // Example: webSocket.sendBIN(payload, length);
+            // hexdump(payload, length); // Example if needed
             break;
         case WStype_ERROR:
-            Serial.printf("[WSc] WebSocket ERROR: %s\n", (char*)payload);
-            webSocketConnected = false; // Ensure this is set on error too
+            Serial.printf("[WSc] Event: WStype_ERROR - error: %s\n", (char*)payload);
+            webSocketConnected = false;
             break;
+
+        // ADD OR MODIFY THESE CASES FOR FRAGMENTATION LOGGING:
         case WStype_FRAGMENT_TEXT_START:
+            Serial.printf("[WSc] Event: WStype_FRAGMENT_TEXT_START\n");
+            break;
         case WStype_FRAGMENT_BIN_START:
+            Serial.printf("[WSc] Event: WStype_FRAGMENT_BIN_START\n");
+            break;
         case WStype_FRAGMENT:
+            Serial.printf("[WSc] Event: WStype_FRAGMENT - Current fragment length: %u\n", length);
+            // Avoid printing payload here unless sure it's text and null-terminated or handled carefully,
+            // as fragments are not necessarily complete messages.
+            // For debugging, if you know it's text and want a peek:
+            // if (length > 0 && payload) {
+            //    char buf[33]; // Print up to 32 chars + null terminator
+            //    memcpy(buf, payload, length < 32 ? length : 32);
+            //    buf[length < 32 ? length : 32] = '\0'; // Ensure null termination
+            //    Serial.printf("[WSc] Fragment Data Peek: %s\n", buf);
+            // }
+            break;
         case WStype_FRAGMENT_FIN:
-            // Log these events if needed for debugging fragmentation issues
-            // Serial.printf("[WSc] WebSocket FRAGMENT event type: %d\n", type);
+            Serial.printf("[WSc] Event: WStype_FRAGMENT_FIN - Final fragment length: %u\n", length);
+            // After this, the library should internally reassemble and then issue a WStype_TEXT or WStype_BIN event
+            // with the complete payload.
+            break;
+
+        default:
+            Serial.printf("[WSc] Event: Unknown WStype_t: %d\n", type);
             break;
     }
 }
