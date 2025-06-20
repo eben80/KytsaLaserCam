@@ -653,6 +653,37 @@ showBongoCat();
   webSocket.setReconnectInterval(5000); // Already set via const but can be set here too
   // Optional: for SSL, if your server uses a self-signed cert or you want to pin.
   // webSocket.setFingerprint("...");
+
+    // IMPORTANT: WebSocket Receive Buffer Size for addTimer command
+    // The "addTimer" command payload is being truncated, likely due to the default
+    // WebSocket client receive buffer size being too small (observed truncation at ~22 bytes).
+    // To fix this, you may need to modify a configuration constant within the WebSocket library files.
+    //
+    // 1. Locate your WebSocket library files:
+    //    Typically found in your Arduino libraries folder, under a name like "WebSockets" or "WebSocketsClient".
+    //    For this project, it's likely under `lib/WebSockets/src/`.
+    //
+    // 2. Search for buffer size constants in files like `WebSocketsClient.h`, `WebSockets.h`,
+    //    or a specific `WebSocketsOptions.h` or `WebSocketsConfig.h` if it exists.
+    //
+    // 3. Look for constants such as:
+    //    - `WEBSOCKETS_CLIENT_RX_BUFFER_SIZE` (if available, this is the most direct)
+    //    - `WEBSOCKETS_TCP_BUFFER_SIZE`
+    //    - `TCP_WND` (TCP Window size, sometimes influences this for some libraries)
+    //    - `WEBSOCKETS_MAX_FRAME_SIZE` (less likely for RX of small messages, but related)
+    //    - Any other obvious buffer size or "max packet" related constant.
+    //
+    // 4. Increase the value of this constant.
+    //    - Default might be small (e.g., 64, 128, or related to TCP MSS ~536).
+    //    - Try increasing it to at least 256, or preferably 512 or 1024, to accommodate
+    //      JSON commands comfortably. For example:
+    //      `#define WEBSOCKETS_CLIENT_RX_BUFFER_SIZE 512`
+    //
+    // 5. Recompile and upload the firmware.
+    //
+    // If a specific method like `webSocket.setRxBufferSize(size)` were available, it would be called here.
+    // However, this is not standard for the commonly used ESP32 WebSocketsClient library by Markus Sattler.
+    // Serial.println("[INFO] Check WebSocket library for RX buffer size if 'addTimer' fails due to truncated payload.");
 }
 
 /**
