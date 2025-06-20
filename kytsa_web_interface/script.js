@@ -110,14 +110,13 @@ document.addEventListener('DOMContentLoaded', () => {
          * @param {MessageEvent} event - The message event from the WebSocket.
          */
         socket.onmessage = (event) => {
-            console.log('[DEBUG] Raw message from server:', event.data);
-            // console.log('Message from server:', event.data); // Original log, can be kept or removed
+            console.log('[DEBUG] ONMESSAGE: Raw data received from server:', event.data); // Ensure this is active
             let message;
             try {
                 message = JSON.parse(event.data);
-                console.log('[DEBUG] Parsed message:', message);
+                console.log('[DEBUG] ONMESSAGE: Parsed message:', message); // Ensure this is active
             } catch (e) {
-                console.error('Failed to parse JSON message from server:', event.data, e);
+                console.error('[ERROR] ONMESSAGE: Failed to parse JSON message from server:', event.data, e);
                 return;
             }
 
@@ -162,52 +161,65 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (message.data.maxY !== undefined) servoYSliderEl.max = message.data.maxY;
                     }
                     break;
-                case 'systemConfig': // New message type for initial config
-                    if (message.deviceId === selectedDeviceId) {
-                        console.log('[DEBUG] systemConfig received. Full config object:', message.config);
-                        console.log('[DEBUG] Timers from systemConfig:', message.config ? message.config.timers : 'config object missing');
-                        const config = message.config;
+                case 'systemConfig':
+                    console.log('[DEBUG] SYSTEM_CONFIG_HANDLER: Matched message.type === "systemConfig".');
+                    console.log('[DEBUG] SYSTEM_CONFIG_HANDLER: Full message object for systemConfig:', JSON.stringify(message, null, 2));
 
-                        // Update servo limits from systemConfig
-                        if (config.minX !== undefined) servoXSliderEl.min = config.minX;
-                        if (config.maxX !== undefined) servoXSliderEl.max = config.maxX;
-                        if (config.minY !== undefined) servoYSliderEl.min = config.minY;
-                        if (config.maxY !== undefined) servoYSliderEl.max = config.maxY;
+                    if (message.deviceId === selectedDeviceId) { // Keep device check
+                        if (message.config) {
+                            console.log('[DEBUG] SYSTEM_CONFIG_HANDLER: message.config object exists:', JSON.stringify(message.config, null, 2));
 
-                        // Update slider values
-                        if (parseInt(servoXSliderEl.value) < config.minX) servoXSliderEl.value = config.minX;
-                        if (parseInt(servoXSliderEl.value) > config.maxX) servoXSliderEl.value = config.maxX;
-                        if (servoXValueEl) servoXValueEl.textContent = servoXSliderEl.value;
+                            // Update servo limits from systemConfig
+                            if (servoXSliderEl && message.config.minX !== undefined) servoXSliderEl.min = message.config.minX;
+                            if (servoXSliderEl && message.config.maxX !== undefined) servoXSliderEl.max = message.config.maxX;
+                            if (servoYSliderEl && message.config.minY !== undefined) servoYSliderEl.min = message.config.minY;
+                            if (servoYSliderEl && message.config.maxY !== undefined) servoYSliderEl.max = message.config.maxY;
 
-                        if (parseInt(servoYSliderEl.value) < config.minY) servoYSliderEl.value = config.minY;
-                        if (parseInt(servoYSliderEl.value) > config.maxY) servoYSliderEl.value = config.maxY;
-                        if (servoYValueEl) servoYValueEl.textContent = servoYSliderEl.value;
+                            // Update slider values
+                            if (servoXSliderEl && message.config.minX !== undefined && parseInt(servoXSliderEl.value) < message.config.minX) servoXSliderEl.value = message.config.minX;
+                            if (servoXSliderEl && message.config.maxX !== undefined && parseInt(servoXSliderEl.value) > message.config.maxX) servoXSliderEl.value = message.config.maxX;
+                            if (servoXValueEl) servoXValueEl.textContent = servoXSliderEl.value;
 
-                        // Update CAM states from systemConfig if available
-                        if (config.esp32cam_streaming !== undefined) {
-                            isStreamActive = config.esp32cam_streaming;
-                            if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = isStreamActive ? 'Stop CAM Stream' : 'Start CAM Stream';
-                             if (isStreamActive && streamImgEl) {
-                                streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
-                            } else if (streamImgEl) {
-                                streamImgEl.src = "#";
+                            if (servoYSliderEl && message.config.minY !== undefined && parseInt(servoYSliderEl.value) < message.config.minY) servoYSliderEl.value = message.config.minY;
+                            if (servoYSliderEl && message.config.maxY !== undefined && parseInt(servoYSliderEl.value) > message.config.maxY) servoYSliderEl.value = message.config.maxY;
+                            if (servoYValueEl) servoYValueEl.textContent = servoYSliderEl.value;
+
+                            // Update CAM states from systemConfig if available
+                            if (message.config.esp32cam_streaming !== undefined) {
+                                isStreamActive = message.config.esp32cam_streaming;
+                                if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = isStreamActive ? 'Stop CAM Stream' : 'Start CAM Stream';
+                                 if (isStreamActive && streamImgEl) {
+                                    streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
+                                } else if (streamImgEl) {
+                                    streamImgEl.src = "#";
+                                }
+                            } else {
+                                if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = 'Start CAM Stream';
+                                if (streamImgEl) streamImgEl.src = "#";
+                                isStreamActive = false;
                             }
-                        } else { // Default if not in systemConfig
-                            if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = 'Start CAM Stream';
-                            if (streamImgEl) streamImgEl.src = "#";
-                            isStreamActive = false;
-                        }
-                        if (config.cam_led_active !== undefined) {
-                            isCamLedActive = config.cam_led_active;
-                            if (toggleCamLedBtn) toggleCamLedBtn.textContent = isCamLedActive ? 'Turn CAM LED OFF' : 'Turn CAM LED ON';
-                        } else { // Default
-                            if (toggleCamLedBtn) toggleCamLedBtn.textContent = 'Turn CAM LED ON';
-                            isCamLedActive = false;
-                        }
+                            if (message.config.cam_led_active !== undefined) {
+                                isCamLedActive = message.config.cam_led_active;
+                                if (toggleCamLedBtn) toggleCamLedBtn.textContent = isCamLedActive ? 'Turn CAM LED OFF' : 'Turn CAM LED ON';
+                            } else {
+                                if (toggleCamLedBtn) toggleCamLedBtn.textContent = 'Turn CAM LED ON';
+                                isCamLedActive = false;
+                            }
 
-                        // Handle timers
-                        displayTimers(config.timers || []);
-                    }
+                            // Handle timers
+                            if (message.config.hasOwnProperty('timers')) {
+                                console.log('[DEBUG] SYSTEM_CONFIG_HANDLER: message.config.timers exists. Value:', JSON.stringify(message.config.timers, null, 2));
+                                console.log('[DEBUG] SYSTEM_CONFIG_HANDLER: Type of timers:', typeof message.config.timers, 'Is Array?', Array.isArray(message.config.timers));
+                                displayTimers(message.config.timers || []);
+                            } else {
+                                console.warn('[WARN] SYSTEM_CONFIG_HANDLER: message.config does NOT have "timers" property. Displaying empty list.');
+                                displayTimers([]);
+                            }
+                        } else {
+                            console.error('[ERROR] SYSTEM_CONFIG_HANDLER: message.config object is missing in systemConfig message. Cannot process timers or servo limits.');
+                            displayTimers([]);
+                        }
+                    } // end if message.deviceId === selectedDeviceId
                     break;
                 case 'timerList': // Message type for timer updates
                 case 'scheduleUpdate': // ESP32 might send this after add/delete timer
@@ -353,12 +365,14 @@ document.addEventListener('DOMContentLoaded', () => {
      * Displays the list of timers and sets up delete buttons.
      * @param {Array<Object>} timers - Array of timer objects, e.g., [{startTimeMinutes: 600, stopTimeMinutes: 720}, ...]
      */
-    function displayTimers(timers = []) {
-        console.log('[DEBUG] displayTimers called with:', timers);
+    function displayTimers(timers) {
+            // ADD THIS LOG:
+            console.log('[DEBUG] DISPLAY_TIMERS: Called with timers argument:', JSON.stringify(timers, null, 2), 'Is Array?', Array.isArray(timers));
+
         if (!timerListEl) return;
         timerListEl.innerHTML = ''; // Clear existing timers
 
-        if (!timers || timers.length === 0) {
+        if (!timers || !Array.isArray(timers) || timers.length === 0) { // Made condition more robust
             timerListEl.innerHTML = '<p>No timers currently configured.</p>';
             return;
         }

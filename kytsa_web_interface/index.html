@@ -19,6 +19,31 @@
     <div class="container">
         <div class="controls">
             <h2>Controls (<span id="control-target-device">No Target</span>)</h2>
+
+            <div class="control-group">
+                <h3>Motion</h3>
+                <button id="randomMotionToggle" disabled>Toggle Random Motion</button><br>
+            </div>
+
+            <div class="control-group">
+                <h3>ESP32 CAM</h3>
+                <button id="toggleCamStreamBtn" disabled>Toggle CAM Stream</button><br>
+                <button id="toggleCamLedBtn" disabled>Toggle CAM LED</button><br>
+            </div>
+
+            <div class="timer-controls control-group"> <!-- Assuming timer-controls can also be a control-group or styled similarly -->
+                <h3>Timer Configuration</h3> <!-- Changed from H2 to H3 for consistency -->
+                <label for="timerStartTime">Start Time:</label>
+                <input type="time" id="timerStartTime" disabled><br>
+                <label for="timerEndTime">End Time:</label>
+                <input type="time" id="timerEndTime" disabled><br>
+                <button id="addTimerBtn" disabled>Add Timer</button>
+                <h4>Scheduled Timers</h4> <!-- Changed from H3 to H4 as Timer Config is now H3 -->
+                <div id="timerList">
+                    <!-- Timer entries will be added here by script.js -->
+                </div>
+            </div>
+
             <div class="control-group">
                 <h3><button id="toggleServoConfigBtn" class="toggle-btn">+/-</button> Servo Configuration</h3>
                 <div id="servoConfigContent" style="display: none;">
@@ -32,26 +57,11 @@
                     <button id="setYMaxBtn" disabled>Set Y Max</button><br>
                 </div>
             </div>
-            <div class="control-group">
-                <h3>Motion</h3>
-                <button id="randomMotionToggle" disabled>Toggle Random Motion</button><br>
-            </div>
-            <div class="control-group">
-                <h3>ESP32 CAM</h3>
-                <button id="toggleCamStreamBtn" disabled>Toggle CAM Stream</button><br>
-                <button id="toggleCamLedBtn" disabled>Toggle CAM LED</button><br>
-            </div>
-            <!-- Timer Configuration Section Moved Here -->
-            <div class="timer-controls">
-                <h2>Timer Configuration</h2>
-                <label for="timerStartTime">Start Time:</label>
-                <input type="time" id="timerStartTime" disabled><br>
-                <label for="timerEndTime">End Time:</label>
-                <input type="time" id="timerEndTime" disabled><br>
-                <button id="addTimerBtn" disabled>Add Timer</button>
-                <h3>Scheduled Timers</h3>
-                <div id="timerList">
-                    <!-- Timer entries will be added here by script.js -->
+
+            <div class="control-group"> <!-- Changed from status-section -->
+                <h3><button id="toggleDeviceStatusBtn" class="toggle-btn">+/-</button> Device Status (<span id="status-target-device">No Target</span>)</h3>
+                <div id="deviceStatusContent" style="display: none;">
+                    <pre id="deviceStatus">Waiting for updates...</pre>
                 </div>
             </div>
         </div>
@@ -60,13 +70,6 @@
             <h2>Live Stream</h2>
             <div id="stream-container">
                 <img id="stream" src="#" alt="Live Stream Paused" width="640" height="480">
-            </div>
-        </div>
-
-        <div class="status-section">
-            <h2><button id="toggleDeviceStatusBtn" class="toggle-btn">+/-</button> Device Status (<span id="status-target-device">No Target</span>)</h2>
-            <div id="deviceStatusContent" style="display: none;">
-                <pre id="deviceStatus">Waiting for updates...</pre>
             </div>
         </div>
     </div>
