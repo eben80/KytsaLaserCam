@@ -515,20 +515,28 @@ showBongoCat();
       int stopMins = preferences.getInt((baseKey + "_stop").c_str(), -1);
       Serial.printf("[DEBUG] Slot %d: Read startMins=%d, stopMins=%d from Prefs\n", i, startMins, stopMins);
 
-      if (startMins != -1 && stopMins != -1 && startMins >=0 && startMins < (24*60) && stopMins >=0 && stopMins < (24*60)) { // Only load if both are valid and within range
+      // Enhanced validation: valid range AND non-zero duration
+      if (startMins >= 0 && startMins < (24*60) &&
+          stopMins >= 0 && stopMins < (24*60) &&
+          startMins != stopMins) {
+
+          // This is a valid timer slot, proceed to load/compact it
           if (validSlotsCount < i) { // Compact valid timers to the front of the array
               timeSlots[validSlotsCount].startTimeMinutes = startMins;
               timeSlots[validSlotsCount].stopTimeMinutes = stopMins;
           } else { // validSlotsCount == i
-               timeSlots[i].startTimeMinutes = startMins; // Or use validSlotsCount index here too for consistency
-               timeSlots[i].stopTimeMinutes = stopMins;  // timeSlots[validSlotsCount] would also work
+               // If we always assign to timeSlots[validSlotsCount], this branch might not be strictly needed
+               // as timeSlots[i] would be timeSlots[validSlotsCount]
+               timeSlots[validSlotsCount].startTimeMinutes = startMins;
+               timeSlots[validSlotsCount].stopTimeMinutes = stopMins;
           }
           timeSlots[validSlotsCount].active = false; // Initialize as not active
-          validSlotsCount++; // Increment for each valid timer found and loaded
-          Serial.printf("[DEBUG] Loaded valid timer %d: Start=%d, Stop=%d. validSlotsCount is now %d\n", validSlotsCount -1, timeSlots[validSlotsCount-1].startTimeMinutes, timeSlots[validSlotsCount-1].stopTimeMinutes, validSlotsCount);
+          Serial.printf("[DEBUG] Loaded Valid Timer %d (from slot %d): Start=%d, Stop=%d\n", validSlotsCount, i, timeSlots[validSlotsCount].startTimeMinutes, timeSlots[validSlotsCount].stopTimeMinutes);
+          validSlotsCount++;
       } else {
-          // This slot is invalid or partially invalid in preferences, or beyond the previously saved numTimeSlots.
-          // It will be skipped and not counted in numTimeSlots if it's one of the initially loaded numTimeSlots.
+          // This timer is invalid (e.g. -1 in prefs, out of minute range, or zero duration)
+          Serial.printf("[DEBUG] Invalid or zero-duration timer (Start: %d, Stop: %d) from Prefs for slot %d - Skipping.\n", startMins, stopMins, i);
+          // No need to explicitly remove from preferences here if we save the compacted valid list later
           // If we compact, any old data at timeSlots[i] from a previous run will be overwritten by a valid timer
           // or left as is if no more valid timers are found.
           // If we want to ensure all non-loaded slots in timeSlots array are -1, we could explicitly set them:
@@ -713,10 +721,10 @@ void addTimeSlot(String startTimeStr, String stopTimeStr) {
     int stopTimeMinutes = timeToMinutes(stopTimeStr);
     Serial.printf("[DEBUG] Converted to startTimeMinutes: %d, stopTimeMinutes: %d\n", startTimeMinutes, stopTimeMinutes);
 
-    // Basic validation for converted minutes
-    if (startTimeMinutes == -1 || stopTimeMinutes == -1) {
-        Serial.println("[DEBUG] Invalid time string provided to addTimeSlot. Timer not added.");
-        return;
+    // Enhanced validation for converted minutes, including zero-duration check
+    if (startTimeMinutes == -1 || stopTimeMinutes == -1 || startTimeMinutes == stopTimeMinutes) {
+        Serial.printf("[DEBUG] Invalid input or zero-duration timer provided to addTimeSlot (StartMins: %d, StopMins: %d). Timer not added.\n", startTimeMinutes, stopTimeMinutes);
+        return; // Exit if invalid or zero-duration
     }
 
     timeSlots[numTimeSlots].startTimeMinutes = startTimeMinutes;

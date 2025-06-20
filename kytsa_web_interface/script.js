@@ -509,18 +509,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Timer management
     if (addTimerBtn) {
         addTimerBtn.addEventListener('click', () => {
-            const startTime = timerStartTimeEl.value;
-            const endTime = timerEndTimeEl.value;
-            if (!startTime || !endTime) {
+            const startTimeValue = timerStartTimeEl.value;
+            const endTimeValue = timerEndTimeEl.value;
+
+            console.log('[DEBUG] "Add Timer" button clicked. Start time input:', startTimeValue, 'End time input:', endTimeValue);
+
+            // Basic validation: ensure values are not empty
+            if (!startTimeValue || !endTimeValue) {
                 alert('Please select both a start and end time for the timer.');
+                console.warn('[WARN] Timer add attempt with empty start/end time.');
                 return;
             }
-            console.log('[DEBUG] "Add Timer" button clicked. Start time:', startTime, 'End time:', endTime);
-            // Basic validation: end time after start time (can be more complex if spanning midnight)
-            // For now, sending to ESP32 for more robust validation.
-            sendCommand({ command: 'addTimer', startTime: startTime, endTime: endTime });
-            console.log('[DEBUG] Sent "addTimer" command to ESP32.');
-            // Clear input fields after attempting to add
+
+            sendCommand({
+                command: 'addTimer',
+                startTime: startTimeValue,
+                endTime: endTimeValue
+            });
+            console.log('[DEBUG] Sent "addTimer" command to ESP32 with times:', startTimeValue, endTimeValue);
+
+            // Optional: Clear input fields after sending
             // timerStartTimeEl.value = '';
             // timerEndTimeEl.value = '';
             // ESP32 should send back updated timer list via 'systemConfig' or 'timerList'
