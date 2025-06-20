@@ -1160,7 +1160,7 @@ void loop() {
     String currentTimeForLogic = fullTime.substring(0, 5); // Should be HH:MM
 
     // Log the change for debugging
-    Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
+    // Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
 
     int currentMinutes = timeToMinutes(currentTimeForLogic);
 
