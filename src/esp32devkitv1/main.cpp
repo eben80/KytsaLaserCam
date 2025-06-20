@@ -239,25 +239,45 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     return;
                 }
 
-                // Standard handling for addTimer using simplified keys (cmd: "at")
-                if (doc.containsKey("cmd") && strcmp(doc["cmd"], "at") == 0) {
-                    Serial.println("[DEBUG] Received 'addTimer' (cmd: 'at') command."); // Retained for clarity
-                    const char* startTimeStr = doc["sT"];
-                    const char* endTimeStr = doc["eT"];
-
-                    if (startTimeStr && endTimeStr) {
-                        Serial.printf("[DEBUG] Parsed sT: %s, eT: %s from WebSocket\n", startTimeStr, endTimeStr);
-                        addTimeSlot(String(startTimeStr), String(endTimeStr));
-                    } else {
-                        Serial.println("[DEBUG] 'addTimer' (cmd: 'at') missing sT or eT fields.");
-                    }
-                    sendSystemConfig(); // Send updated config back to all clients
-
-                } else if (doc.containsKey("command")) { // Handle all other standard commands
+                // Reverted: Standard command handling using "command" key
+                if (doc.containsKey("command")) {
                     const char* command = doc["command"];
                     Serial.printf("[DEBUG] Received standard command: %s\n", command);
 
-                    if (strcmp(command, "servoX") == 0) {
+                    // Experimental addTimer_data handler
+                    if (strcmp(command, "addTimer_data") == 0) {
+                        Serial.println("[DEBUG] Received 'addTimer_data' (experimental structure) command.");
+                        const char* dataStr = doc["data"];
+                        if (dataStr) {
+                            String combinedData = String(dataStr);
+                            int semicolonIndex = combinedData.indexOf(';');
+                            if (semicolonIndex > 0 && semicolonIndex < combinedData.length() - 1) {
+                                String startTimeFromData = combinedData.substring(0, semicolonIndex);
+                                String endTimeFromData = combinedData.substring(semicolonIndex + 1);
+                                Serial.printf("[DEBUG] Parsed from 'data' string -> startTime: %s, endTime: %s\n", startTimeFromData.c_str(), endTimeFromData.c_str());
+                                addTimeSlot(startTimeFromData, endTimeFromData);
+                            } else {
+                                Serial.println("[DEBUG] 'addTimer_data' invalid 'data' field format. Expected 'HH:MM;HH:MM'.");
+                            }
+                        } else {
+                            Serial.println("[DEBUG] 'addTimer_data' missing 'data' field.");
+                        }
+                        sendSystemConfig(); // Update client
+                    }
+                    // Original addTimer handler (now deprecated/bypassed if addTimer_data is used)
+                    else if (strcmp(command, "addTimer") == 0) {
+                        Serial.println("[DEBUG] Original 'addTimer' handler called - THIS IS NOW DEPRECATED/BYPASSED if addTimer_data is used.");
+                        // const char* startTimeStr = doc["startTime"];
+                        // const char* endTimeStr = doc["endTime"];
+
+                        // if (startTimeStr && endTimeStr) {
+                        //     Serial.printf("[DEBUG] Parsed startTime: %s, endTime: %s from WebSocket (original structure)\n", startTimeStr, endTimeStr);
+                        //     addTimeSlot(String(startTimeStr), String(endTimeStr));
+                        // } else {
+                        //     Serial.println("[DEBUG] 'addTimer' (original structure) missing startTime or endTime fields.");
+                        // }
+                        // sendSystemConfig();
+                    } else if (strcmp(command, "servoX") == 0) {
                         int val = doc["value"];
                         myservoX.write(val);
                         valueStringX = String(val);
@@ -284,6 +304,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     } else if (strcmp(command, "RANDOM_MOTION_TOGGLE") == 0) {
                         randomMotionActive = !randomMotionActive;
                         Serial.printf("Random motion toggled: %s\n", randomMotionActive ? "ON" : "OFF");
+                        sendSystemConfig(); // Send feedback for UI update
                     }
                     // Commands for ESP32CAM
                     else if (strcmp(command, "START_STREAM") == 0) {
@@ -311,7 +332,6 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         const char* limit_type = doc["limit_type"];
                         int value = doc["value"];
                         Serial.printf("Received setServoLimit: axis=%s, type=%s, value=%d\n", axis, limit_type, value);
-
                         preferences.begin("servo_config", false);
                         if (strcmp(axis, "x") == 0) {
                             if (strcmp(limit_type, "min") == 0) { minX = value; preferences.putInt("min_x", minX); }
@@ -324,8 +344,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
                         sendSystemConfig();
                     }
-                    // Note: The old handler for "command":"addTimer" is intentionally omitted here,
-                    // making "cmd":"at" the only way to add timers.
+                    // The old "addTimer" handler that checked for command == "addTimer" is now removed.
+                    // Payloads with "command":"addTimer" (if sent by an old client) will fall into the "Unknown standard command" log.
                     else if (strcmp(command, "deleteTimer") == 0) {
                         int timerIndex = doc["timerIndex"];
                         Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
@@ -1158,8 +1178,7 @@ void loop() {
     String fullTime = getFormattedTime(); // This is HH:MM:SS
     String currentTimeForLogic = fullTime.substring(0, 5); // Should be HH:MM
 
-    // Log the change for debugging
-    Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
+    // Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str()); // Line is now commented
 
     int currentMinutes = timeToMinutes(currentTimeForLogic);
 

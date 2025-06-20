@@ -529,31 +529,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Construct the simplified command object directly here
-            const simplifiedAddTimerCommandObject = {
-                cmd: "at",
-                sT: startTimeValue,
-                eT: endTimeValue
-                // targetDeviceId is not included here as per the simplified payload strategy
-                // The server-side logic for "at" command should derive device from connection context
+            // NEW EXPERIMENTAL command object structure for addTimer
+            const experimentalAddTimerCommandObject = {
+                type: "command", // Keep type for consistency with other commands
+                targetDeviceId: selectedDeviceId, // Keep for consistency
+                command: "addTimer_data", // New command name
+                data: startTimeValue + ";" + endTimeValue // Combine times into a single string
             };
 
             if (socket && socket.readyState === WebSocket.OPEN) {
-                const messagePayloadString = JSON.stringify(simplifiedAddTimerCommandObject);
+                const messagePayloadString = JSON.stringify(experimentalAddTimerCommandObject);
 
-                console.log('[DEBUG] ADD_TIMER_BTN: Preparing to send stringified payload:', messagePayloadString);
+                // Update log message to reflect the experimental structure
+                console.log('[DEBUG] ADD_TIMER_BTN: Preparing to send stringified (EXPERIMENTAL data string structure) payload:', messagePayloadString);
                 console.log('[DEBUG] ADD_TIMER_BTN: WebSocket readyState before send:', socket.readyState);
                 console.log('[DEBUG] ADD_TIMER_BTN: WebSocket bufferedAmount before send:', socket.bufferedAmount);
 
                 try {
                     socket.send(messagePayloadString);
-                    console.log('[DEBUG] ADD_TIMER_BTN: socket.send() EXECUTED for addTimer command.');
-                    // After a successful send, you might want to re-check bufferedAmount, though it might not update immediately
-                    // console.log('[DEBUG] ADD_TIMER_BTN: WebSocket bufferedAmount after send (may not be updated instantly):', socket.bufferedAmount);
-
+                    console.log('[DEBUG] ADD_TIMER_BTN: socket.send() EXECUTED for addTimer_data (EXPERIMENTAL structure) command.');
                 } catch (e) {
                     console.error('[ERROR] ADD_TIMER_BTN: socket.send() FAILED with exception:', e);
-                    alert('Failed to send addTimer command. Check console for errors.');
+                    alert('Failed to send addTimer_data command. Check console for errors.');
                 }
 
                 // TEMPORARILY COMMENT OUT any automatic refresh/getSystemConfig call
@@ -565,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // // }
 
             } else {
-                alert('WebSocket not connected or not open. Cannot send addTimer command.');
+                alert('WebSocket not connected or not open. Cannot send addTimer_data command.');
                 console.error('[ERROR] ADD_TIMER_BTN: WebSocket not connected or not open. Current readyState:', socket ? socket.readyState : 'socket is null');
             }
 
