@@ -412,35 +412,20 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function sendCommand(commandData) {
         if (!selectedDeviceId) {
-             alert('Please select a device first.');
-             return;
+            alert('Please select a device first.');
+            return;
         }
         if (socket && socket.readyState === WebSocket.OPEN) {
-            let messageToSend;
-
-            if (commandData.command === 'addTimer') {
-                // NEW TEMPORARY SIMPLIFIED PAYLOAD for addTimer:
-                messageToSend = {
-                    cmd: "at", // Short for command: addTimer
-                    sT: commandData.startTime,
-                    eT: commandData.endTime
-                    // type and targetDeviceId are intentionally omitted for this specific command
-                };
-                // console.log('[DEBUG] addTimer: Using simplified payload for sending.'); // Keep if needed, or remove if final
-            } else {
-                // For all other commands, the existing logic
-                messageToSend = {
-                    type: 'command',
-                    targetDeviceId: selectedDeviceId,
-                    ...commandData
-                };
-            }
+            // Generic message construction (special addTimer handling removed)
+            const messageToSend = {
+                type: 'command',
+                targetDeviceId: selectedDeviceId,
+                ...commandData
+            };
 
             const messagePayloadString = JSON.stringify(messageToSend);
-            // The [DEBUG] log for stringified payload is already in place from previous step.
-            console.log('[DEBUG] Refactored Send: Sending WebSocket message (stringified):', messagePayloadString);
+            console.log('[DEBUG] sendCommand: Sending WebSocket message (stringified):', messagePayloadString);
             socket.send(messagePayloadString);
-
         } else {
             alert('WebSocket not connected. Please wait or try refreshing.');
         }
@@ -530,21 +515,59 @@ document.addEventListener('DOMContentLoaded', () => {
             const startTimeValue = timerStartTimeEl.value;
             const endTimeValue = timerEndTimeEl.value;
 
-            console.log('[DEBUG] "Add Timer" button clicked. Start time input:', startTimeValue, 'End time input:', endTimeValue);
+            console.log('[DEBUG] ADD_TIMER_BTN: Clicked. Start input:', startTimeValue, 'End input:', endTimeValue);
 
-            // Basic validation: ensure values are not empty
-            if (!startTimeValue || !endTimeValue) {
-                alert('Please select both a start and end time for the timer.');
-                console.warn('[WARN] Timer add attempt with empty start/end time.');
+            if (!selectedDeviceId) { // Check if a device is selected
+                alert('Please select a device first before adding a timer.');
+                console.warn('[WARN] ADD_TIMER_BTN: No device selected. Command not sent.');
                 return;
             }
 
-            sendCommand({
-                command: 'addTimer',
-                startTime: startTimeValue,
-                endTime: endTimeValue
-            });
-            console.log('[DEBUG] Sent "addTimer" command to ESP32 with times:', startTimeValue, endTimeValue);
+            if (!startTimeValue || !endTimeValue) {
+                alert('Please select both a start and end time for the timer.');
+                console.warn('[WARN] ADD_TIMER_BTN: Empty start/end time. Command not sent.');
+                return;
+            }
+
+            // Construct the simplified command object directly here
+            const simplifiedAddTimerCommandObject = {
+                cmd: "at",
+                sT: startTimeValue,
+                eT: endTimeValue
+                // targetDeviceId is not included here as per the simplified payload strategy
+                // The server-side logic for "at" command should derive device from connection context
+            };
+
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const messagePayloadString = JSON.stringify(simplifiedAddTimerCommandObject);
+
+                console.log('[DEBUG] ADD_TIMER_BTN: Preparing to send stringified payload:', messagePayloadString);
+                console.log('[DEBUG] ADD_TIMER_BTN: WebSocket readyState before send:', socket.readyState);
+                console.log('[DEBUG] ADD_TIMER_BTN: WebSocket bufferedAmount before send:', socket.bufferedAmount);
+
+                try {
+                    socket.send(messagePayloadString);
+                    console.log('[DEBUG] ADD_TIMER_BTN: socket.send() EXECUTED for addTimer command.');
+                    // After a successful send, you might want to re-check bufferedAmount, though it might not update immediately
+                    // console.log('[DEBUG] ADD_TIMER_BTN: WebSocket bufferedAmount after send (may not be updated instantly):', socket.bufferedAmount);
+
+                } catch (e) {
+                    console.error('[ERROR] ADD_TIMER_BTN: socket.send() FAILED with exception:', e);
+                    alert('Failed to send addTimer command. Check console for errors.');
+                }
+
+                // TEMPORARILY COMMENT OUT any automatic refresh/getSystemConfig call
+                // that might have been here or in the sendCommand function for the addTimer case.
+                // Example:
+                // // if (typeof getSystemConfig === 'function') { // Assuming getSystemConfig is not a global function
+                // //    console.log('[DEBUG] ADD_TIMER_BTN: Intentionally NOT calling getSystemConfig post-send for this test.');
+                // //    // sendCommand({ command: 'getSystemConfig' }); // If getSystemConfig itself uses sendCommand
+                // // }
+
+            } else {
+                alert('WebSocket not connected or not open. Cannot send addTimer command.');
+                console.error('[ERROR] ADD_TIMER_BTN: WebSocket not connected or not open. Current readyState:', socket ? socket.readyState : 'socket is null');
+            }
 
             // Optional: Clear input fields after sending
             // timerStartTimeEl.value = '';

@@ -239,11 +239,11 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     return;
                 }
 
-                // Standard handling for simplified addTimer (cmd: "at")
+                // Standard handling for addTimer using simplified keys (cmd: "at")
                 if (doc.containsKey("cmd") && strcmp(doc["cmd"], "at") == 0) {
-                    Serial.println("[DEBUG] Received 'addTimer' (cmd: 'at') command.");
-                    const char* startTimeStr = doc["sT"]; // Using "sT" as key
-                    const char* endTimeStr = doc["eT"];   // Using "eT" as key
+                    Serial.println("[DEBUG] Received 'addTimer' (cmd: 'at') command."); // Retained for clarity
+                    const char* startTimeStr = doc["sT"];
+                    const char* endTimeStr = doc["eT"];
 
                     if (startTimeStr && endTimeStr) {
                         Serial.printf("[DEBUG] Parsed sT: %s, eT: %s from WebSocket\n", startTimeStr, endTimeStr);
@@ -251,9 +251,9 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     } else {
                         Serial.println("[DEBUG] 'addTimer' (cmd: 'at') missing sT or eT fields.");
                     }
-                    sendSystemConfig();
+                    sendSystemConfig(); // Send updated config back to all clients
 
-                } else if (doc.containsKey("command")) { // Handle other existing commands
+                } else if (doc.containsKey("command")) { // Handle all other standard commands
                     const char* command = doc["command"];
                     Serial.printf("[DEBUG] Received standard command: %s\n", command);
 
@@ -324,16 +324,15 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
                         sendSystemConfig();
                     }
-                    // Old "addTimer" handler (using "command":"addTimer") is now effectively removed
-                    // as the "cmd":"at" structure is the standard.
-                    // If a message with "command":"addTimer" arrives, it will fall into the unknown command log below.
+                    // Note: The old handler for "command":"addTimer" is intentionally omitted here,
+                    // making "cmd":"at" the only way to add timers.
                     else if (strcmp(command, "deleteTimer") == 0) {
                         int timerIndex = doc["timerIndex"];
                         Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
                         deleteTimeSlot(timerIndex);
                         sendSystemConfig();
                     } else {
-                        Serial.printf("[WSc] Unknown standard command: %s\n", command);
+                        Serial.printf("[DEBUG] Unknown standard command: %s\n", command);
                     }
                 } else {
                     Serial.println("[WSc] Received JSON without 'cmd' or 'command' key.");
@@ -1160,7 +1159,7 @@ void loop() {
     String currentTimeForLogic = fullTime.substring(0, 5); // Should be HH:MM
 
     // Log the change for debugging
-    // Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
+    Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
 
     int currentMinutes = timeToMinutes(currentTimeForLogic);
 
