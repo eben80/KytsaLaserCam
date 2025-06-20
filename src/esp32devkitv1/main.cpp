@@ -1084,8 +1084,13 @@ void loop() {
   String scheduledStopTime = "";
 
   if (timeClient.isTimeSet()) {
-    String currentTimeStr = getFormattedTime();
-    int currentMinutes = timeToMinutes(currentTimeStr);
+    String fullTime = getFormattedTime(); // This is HH:MM:SS
+    String currentTimeForLogic = fullTime.substring(0, 5); // Should be HH:MM
+
+    // Log the change for debugging
+    Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
+
+    int currentMinutes = timeToMinutes(currentTimeForLogic);
 
     if (currentMinutes == -1) { // timeToMinutes might return -1 if time is not set or format is wrong
         Serial.println("Cannot check schedule, current time is invalid.");
