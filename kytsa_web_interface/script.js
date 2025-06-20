@@ -416,13 +416,30 @@ document.addEventListener('DOMContentLoaded', () => {
              return;
         }
         if (socket && socket.readyState === WebSocket.OPEN) {
-            const message = {
-                type: 'command',
-                targetDeviceId: selectedDeviceId,
-                ...commandData
-            };
-            socket.send(JSON.stringify(message));
-            console.log('Sent command:', message);
+            let messageToSend;
+
+            if (commandData.command === 'addTimer') {
+                // Explicitly construct the message for addTimer
+                messageToSend = {
+                    type: 'command',
+                    targetDeviceId: selectedDeviceId,
+                    command: 'addTimer', // This is the command string for the ESP32
+                    startTime: commandData.startTime,
+                    endTime: commandData.endTime
+                };
+            } else {
+                // For all other commands, the existing spread logic can be used
+                messageToSend = {
+                    type: 'command',
+                    targetDeviceId: selectedDeviceId,
+                    ...commandData
+                };
+            }
+
+            const messagePayloadString = JSON.stringify(messageToSend);
+            console.log('[DEBUG] Refactored Send: Sending WebSocket message (stringified):', messagePayloadString);
+
+            socket.send(messagePayloadString);
         } else {
             alert('WebSocket not connected. Please wait or try refreshing.');
         }

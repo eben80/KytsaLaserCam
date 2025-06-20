@@ -221,10 +221,16 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             }
             break;
         case WStype_TEXT:
-            Serial.printf("[WSc] get text: %s\n", (char*)payload);
-            // Parse JSON command from server
+            // ADD THESE LINES:
+            Serial.printf("[WSc] Raw payload received: %s\n", (char*)payload);
+            Serial.printf("[WSc] Payload length: %u\n", length);
+            // END OF ADDED LINES
+
+            Serial.printf("[WSc] get text: %s\n", (char*)payload); // This line was already there from user log, keep it for consistency or remove if redundant with new raw log
+
+            // Existing code follows
             {
-                StaticJsonDocument<384> doc; // Increased size for potentially larger payloads like addTimer
+                StaticJsonDocument<384> doc; // Ensure this size is appropriate, 384 should be fine for this command
                 DeserializationError error = deserializeJson(doc, payload, length);
                 if (error) {
                     Serial.print(F("deserializeJson() failed: "));
