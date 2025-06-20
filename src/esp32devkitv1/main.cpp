@@ -262,7 +262,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                             Serial.println("[DEBUG] 'addTimer_value' missing 'value' field.");
                         }
                         sendSystemConfig(); // Update client
-
+                    } // <<< ****** ADDED MISSING CLOSING BRACE HERE ******
                     // Deprecated addTimer handlers fully removed.
                     // Standard commands:
                     else if (strcmp(command, "servoX") == 0) {
