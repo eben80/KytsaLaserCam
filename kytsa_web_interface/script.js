@@ -31,6 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const camLedOnBtn = document.getElementById('camLedOn');
     const camLedOffBtn = document.getElementById('camLedOff');
 
+    // Collapsible section elements
+    const toggleServoConfigBtn = document.getElementById('toggleServoConfigBtn');
+    const servoConfigContent = document.getElementById('servoConfigContent');
+    const toggleDeviceStatusBtn = document.getElementById('toggleDeviceStatusBtn');
+    const deviceStatusContent = document.getElementById('deviceStatusContent');
+
     const allControls = [
         servoXSliderEl, servoYSliderEl,
         setXMinBtn, setXMaxBtn, setYMinBtn, setYMaxBtn, // New axis buttons
@@ -149,15 +155,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (parseInt(servoYSliderEl.value) > config.maxY) servoYSliderEl.value = config.maxY;
                         if (servoYValueEl) servoYValueEl.textContent = servoYSliderEl.value;
 
-                        if (config.timers) {
-                            displayTimers(config.timers);
-                        }
+                        // Ensure config.timers is passed as an array, even if null/undefined
+                        displayTimers(config.timers || []);
                     }
                     break;
                 case 'timerList': // Message type for timer updates
                 case 'scheduleUpdate': // ESP32 might send this after add/delete timer
                      if (message.deviceId === selectedDeviceId && message.timers) {
-                        displayTimers(message.timers);
+                        displayTimers(message.timers || []); // Pass empty array if null/undefined
                     }
                     break;
                 case 'error':
@@ -289,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timerListEl.innerHTML = ''; // Clear existing timers
 
         if (!timers || timers.length === 0) {
-            timerListEl.innerHTML = '<p>No timers scheduled.</p>';
+            timerListEl.innerHTML = '<p>No timers currently configured.</p>';
             return;
         }
 
@@ -473,5 +478,47 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize
     setControlsDisabled(true);
     updateUIToggleStates({}); // Initialize button texts
+
+    /**
+     * Sets up a collapsible section with localStorage persistence for its state.
+     * @param {HTMLElement} toggleBtn - The button element that triggers the collapse/expand.
+     * @param {HTMLElement} contentEl - The content element to be shown/hidden.
+     * @param {string} localStorageKey - The key used to store the state in localStorage.
+     */
+    function setupCollapsibleSection(toggleBtn, contentEl, localStorageKey) {
+        if (!toggleBtn || !contentEl) {
+            console.warn(`Collapsible section setup skipped: Button or content element not found for key ${localStorageKey}`);
+            return;
+        }
+
+        // Load saved state
+        const savedState = localStorage.getItem(localStorageKey);
+        if (savedState === 'expanded') {
+            contentEl.style.display = 'block';
+            toggleBtn.textContent = '-';
+        } else {
+            // Default to collapsed if not explicitly expanded or if key doesn't exist
+            contentEl.style.display = 'none';
+            toggleBtn.textContent = '+';
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            const isHidden = contentEl.style.display === 'none';
+            if (isHidden) {
+                contentEl.style.display = 'block';
+                localStorage.setItem(localStorageKey, 'expanded');
+                toggleBtn.textContent = '-';
+            } else {
+                contentEl.style.display = 'none';
+                localStorage.setItem(localStorageKey, 'collapsed');
+                toggleBtn.textContent = '+';
+            }
+        });
+    }
+
+    // Setup collapsible sections
+    setupCollapsibleSection(toggleServoConfigBtn, servoConfigContent, 'servoConfigState');
+    setupCollapsibleSection(toggleDeviceStatusBtn, deviceStatusContent, 'deviceStatusState');
+
     connectWebSocket(); // Start WebSocket connection on page load
 });
