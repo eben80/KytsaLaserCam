@@ -26,10 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const addTimerBtn = document.getElementById('addTimerBtn');
     const timerListEl = document.getElementById('timerList');
 
-    const camStreamStartBtn = document.getElementById('camStreamStart');
-    const camStreamStopBtn = document.getElementById('camStreamStop');
-    const camLedOnBtn = document.getElementById('camLedOn');
-    const camLedOffBtn = document.getElementById('camLedOff');
+    // CAM control buttons (consolidated)
+    const toggleCamStreamBtn = document.getElementById('toggleCamStreamBtn');
+    const toggleCamLedBtn = document.getElementById('toggleCamLedBtn');
 
     // Collapsible section elements
     const toggleServoConfigBtn = document.getElementById('toggleServoConfigBtn');
@@ -41,8 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         servoXSliderEl, servoYSliderEl,
         setXMinBtn, setXMaxBtn, setYMinBtn, setYMaxBtn, // New axis buttons
         timerStartTimeEl, timerEndTimeEl, addTimerBtn, // New timer controls
-        randomMotionToggleBtn, camStreamStartBtn, camStreamStopBtn,
-        camLedOnBtn, camLedOffBtn
+        randomMotionToggleBtn, toggleCamStreamBtn, toggleCamLedBtn // Updated CAM buttons
     ];
 
     /** @type {WebSocket | null} The main WebSocket connection instance. */
@@ -51,6 +49,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedDeviceId = null;
     /** @type {Object<string, Object>} Stores the last known state for each device. deviceId -> { stateKey: stateValue }. */
     let deviceStates = {}; // { deviceId: { key: value } }
+
+    // State variables and timeouts for CAM controls
+    let isStreamActive = false;
+    let streamToggleTimeoutId = null;
+    let isCamLedActive = false;
+    let ledToggleTimeoutId = null;
+    const CAM_TOGGLE_TIMEOUT = 2000; // 2 seconds
 
     /**
      * Enables or disables all control elements on the page.
@@ -88,11 +93,12 @@ document.addEventListener('DOMContentLoaded', () => {
          * Updates UI status, sends client initialization message.
          */
         socket.onopen = () => {
+            console.log('[DEBUG] WebSocket opened.');
             if (wsStatusEl) {
                 wsStatusEl.textContent = 'Connected';
                 wsStatusEl.className = 'connected';
             }
-            console.log('WebSocket connected');
+            console.log('WebSocket connected'); // Original log, can be kept or removed
             socket.send(JSON.stringify({ type: 'webClientInit' }));
             // Controls remain disabled until a device is selected
             setControlsDisabled(true);
@@ -104,10 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
          * @param {MessageEvent} event - The message event from the WebSocket.
          */
         socket.onmessage = (event) => {
-            console.log('Message from server:', event.data);
+            console.log('[DEBUG] Raw message from server:', event.data);
+            // console.log('Message from server:', event.data); // Original log, can be kept or removed
             let message;
             try {
                 message = JSON.parse(event.data);
+                console.log('[DEBUG] Parsed message:', message);
             } catch (e) {
                 console.error('Failed to parse JSON message from server:', event.data, e);
                 return;
@@ -129,8 +137,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (message.deviceId === selectedDeviceId) {
                         updateDeviceStatusDisplay(message.data);
-                        updateUIToggleStates(message.data); // Handles random motion, could update servo limits if included
-                        // If statusUpdate includes servo limits, update them (optional redundancy)
+                        updateUIToggleStates(message.data);
+
+                        // Update CAM states from statusUpdate
+                        if (message.data.esp32cam_streaming !== undefined) {
+                            isStreamActive = message.data.esp32cam_streaming;
+                            if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = isStreamActive ? 'Stop CAM Stream' : 'Start CAM Stream';
+                            // Update stream image source based on actual streaming state
+                            if (isStreamActive && streamImgEl) {
+                                streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
+                            } else if (streamImgEl) {
+                                streamImgEl.src = "#";
+                            }
+                        }
+                        if (message.data.cam_led_active !== undefined) {
+                            isCamLedActive = message.data.cam_led_active;
+                            if (toggleCamLedBtn) toggleCamLedBtn.textContent = isCamLedActive ? 'Turn CAM LED OFF' : 'Turn CAM LED ON';
+                        }
+
+                        // If statusUpdate includes servo limits, update them
                         if (message.data.minX !== undefined) servoXSliderEl.min = message.data.minX;
                         if (message.data.maxX !== undefined) servoXSliderEl.max = message.data.maxX;
                         if (message.data.minY !== undefined) servoYSliderEl.min = message.data.minY;
@@ -139,14 +164,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'systemConfig': // New message type for initial config
                     if (message.deviceId === selectedDeviceId) {
-                        console.log("Received systemConfig:", message.config);
+                        console.log('[DEBUG] systemConfig received. Full config object:', message.config);
+                        console.log('[DEBUG] Timers from systemConfig:', message.config ? message.config.timers : 'config object missing');
                         const config = message.config;
+
+                        // Update servo limits from systemConfig
                         if (config.minX !== undefined) servoXSliderEl.min = config.minX;
                         if (config.maxX !== undefined) servoXSliderEl.max = config.maxX;
                         if (config.minY !== undefined) servoYSliderEl.min = config.minY;
                         if (config.maxY !== undefined) servoYSliderEl.max = config.maxY;
 
-                        // Update slider values if they are outside new limits
+                        // Update slider values
                         if (parseInt(servoXSliderEl.value) < config.minX) servoXSliderEl.value = config.minX;
                         if (parseInt(servoXSliderEl.value) > config.maxX) servoXSliderEl.value = config.maxX;
                         if (servoXValueEl) servoXValueEl.textContent = servoXSliderEl.value;
@@ -155,13 +183,36 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (parseInt(servoYSliderEl.value) > config.maxY) servoYSliderEl.value = config.maxY;
                         if (servoYValueEl) servoYValueEl.textContent = servoYSliderEl.value;
 
-                        // Ensure config.timers is passed as an array, even if null/undefined
+                        // Update CAM states from systemConfig if available
+                        if (config.esp32cam_streaming !== undefined) {
+                            isStreamActive = config.esp32cam_streaming;
+                            if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = isStreamActive ? 'Stop CAM Stream' : 'Start CAM Stream';
+                             if (isStreamActive && streamImgEl) {
+                                streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
+                            } else if (streamImgEl) {
+                                streamImgEl.src = "#";
+                            }
+                        } else { // Default if not in systemConfig
+                            if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = 'Start CAM Stream';
+                            if (streamImgEl) streamImgEl.src = "#";
+                            isStreamActive = false;
+                        }
+                        if (config.cam_led_active !== undefined) {
+                            isCamLedActive = config.cam_led_active;
+                            if (toggleCamLedBtn) toggleCamLedBtn.textContent = isCamLedActive ? 'Turn CAM LED OFF' : 'Turn CAM LED ON';
+                        } else { // Default
+                            if (toggleCamLedBtn) toggleCamLedBtn.textContent = 'Turn CAM LED ON';
+                            isCamLedActive = false;
+                        }
+
+                        // Handle timers
                         displayTimers(config.timers || []);
                     }
                     break;
                 case 'timerList': // Message type for timer updates
                 case 'scheduleUpdate': // ESP32 might send this after add/delete timer
                      if (message.deviceId === selectedDeviceId && message.timers) {
+                        console.log('[DEBUG] timerList or scheduleUpdate received. Timers:', message.timers);
                         displayTimers(message.timers || []); // Pass empty array if null/undefined
                     }
                     break;
@@ -184,8 +235,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 wsStatusEl.textContent = 'Disconnected';
                 wsStatusEl.className = 'disconnected';
             }
-            console.log('WebSocket disconnected. Reason:', event.reason, 'Code:', event.code);
+            console.log('[DEBUG] WebSocket closed. Code:', event.code, 'Reason:', event.reason);
             setControlsDisabled(true);
+            // Clear CAM toggle timeouts
+            if (streamToggleTimeoutId) { clearTimeout(streamToggleTimeoutId); streamToggleTimeoutId = null; }
+            if (ledToggleTimeoutId) { clearTimeout(ledToggleTimeoutId); ledToggleTimeoutId = null; }
+            // Reset button states as they are part of allControls and will be disabled by setControlsDisabled
+            // Text content will be reset on next device selection or by status update
+            if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = 'Start CAM Stream';
+            if (toggleCamLedBtn) toggleCamLedBtn.textContent = 'Turn CAM LED ON';
+            isStreamActive = false;
+            isCamLedActive = false;
+            if (streamImgEl) streamImgEl.src = "#";
+
+
             // Avoid rapid reconnection loops if server is truly down
             setTimeout(connectWebSocket, 5000 + Math.random() * 1000);
         };
@@ -197,7 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
          * @param {Event} error - The error event from the WebSocket.
          */
         socket.onerror = (error) => {
-            console.error('WebSocket error:', error);
+            console.log('[DEBUG] WebSocket error:', error);
+            // console.error('WebSocket error:', error); // Original log
             if (wsStatusEl) {
                 wsStatusEl.textContent = 'Error';
                 wsStatusEl.className = 'disconnected'; // Visually treat as disconnected
@@ -290,6 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {Array<Object>} timers - Array of timer objects, e.g., [{startTimeMinutes: 600, stopTimeMinutes: 720}, ...]
      */
     function displayTimers(timers = []) {
+        console.log('[DEBUG] displayTimers called with:', timers);
         if (!timerListEl) return;
         timerListEl.innerHTML = ''; // Clear existing timers
 
@@ -372,22 +437,40 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedDeviceId) {
                 setControlsDisabled(false);
                 // Request full system config for the selected device
+                console.log('[DEBUG] Device selected. Sending "getSystemConfig" command.');
                 sendCommand({ command: 'getSystemConfig' });
 
                 // Initial placeholder display until config arrives
                 const currentDeviceState = deviceStates[selectedDeviceId] || {};
                 updateDeviceStatusDisplay(currentDeviceState); // Shows basic status if available
                 updateUIToggleStates(currentDeviceState); // For random motion toggle
-                if (timerListEl) timerListEl.innerHTML = '<p>Loading timers...</p>';
+                if (timerListEl) timerListEl.innerHTML = '<p>Loading timers...</p>'; // Will be updated by systemConfig
 
-
-                if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
+                // Default button texts - will be updated by systemConfig or statusUpdate
+                if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = 'Start CAM Stream';
+                if (toggleCamLedBtn) toggleCamLedBtn.textContent = 'Turn CAM LED ON';
+                // Stream image will be set by systemConfig/statusUpdate. Initial src set here for immediate feedback.
+                // if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`; // This might be too soon if stream isn't active
             } else {
                 setControlsDisabled(true);
                 if (deviceStatusEl) deviceStatusEl.textContent = 'Waiting for updates...';
-                updateUIToggleStates({});
+                updateUIToggleStates({}); // Clears random motion toggle text
                 if (streamImgEl) streamImgEl.src = "#";
-                if (timerListEl) timerListEl.innerHTML = ''; // Clear timers when no device selected
+                if (timerListEl) timerListEl.innerHTML = ''; // Clear timers
+
+                // Clear CAM toggle timeouts and reset states
+                if (streamToggleTimeoutId) { clearTimeout(streamToggleTimeoutId); streamToggleTimeoutId = null; }
+                if (ledToggleTimeoutId) { clearTimeout(ledToggleTimeoutId); ledToggleTimeoutId = null; }
+                if (toggleCamStreamBtn) {
+                    // toggleCamStreamBtn.disabled = true; // Done by setControlsDisabled
+                    toggleCamStreamBtn.textContent = 'Start CAM Stream';
+                }
+                if (toggleCamLedBtn) {
+                    // toggleCamLedBtn.disabled = true; // Done by setControlsDisabled
+                    toggleCamLedBtn.textContent = 'Turn CAM LED ON';
+                }
+                isStreamActive = false;
+                isCamLedActive = false;
             }
         });
     }
@@ -432,9 +515,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Please select both a start and end time for the timer.');
                 return;
             }
+            console.log('[DEBUG] "Add Timer" button clicked. Start time:', startTime, 'End time:', endTime);
             // Basic validation: end time after start time (can be more complex if spanning midnight)
             // For now, sending to ESP32 for more robust validation.
             sendCommand({ command: 'addTimer', startTime: startTime, endTime: endTime });
+            console.log('[DEBUG] Sent "addTimer" command to ESP32.');
             // Clear input fields after attempting to add
             // timerStartTimeEl.value = '';
             // timerEndTimeEl.value = '';
@@ -442,37 +527,65 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Removed laserToggleBtn and relayToggleBtn event listeners
+    // Removed old CAM button event listeners (camStreamStartBtn, camStreamStopBtn, camLedOnBtn, camLedOffBtn)
+
+    if (toggleCamStreamBtn) {
+        toggleCamStreamBtn.addEventListener('click', () => {
+            if (streamToggleTimeoutId) {
+                console.log("Stream toggle cooling down");
+                return;
+            }
+            if (isStreamActive) {
+                sendCommand({ command: 'STOP_STREAM' });
+                toggleCamStreamBtn.textContent = 'Start CAM Stream'; // Optimistic
+                if (streamImgEl) streamImgEl.src = "#";
+            } else {
+                sendCommand({ command: 'START_STREAM' });
+                toggleCamStreamBtn.textContent = 'Stop CAM Stream'; // Optimistic
+                if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
+            }
+            isStreamActive = !isStreamActive; // Optimistic toggle
+            toggleCamStreamBtn.disabled = true;
+            streamToggleTimeoutId = setTimeout(() => {
+                toggleCamStreamBtn.disabled = false;
+                streamToggleTimeoutId = null;
+                // Re-check actual state after timeout if status hasn't updated it
+                // This might involve a getSystemConfig or relying on next statusUpdate
+                // For now, the statusUpdate handler should correct the text if needed.
+            }, CAM_TOGGLE_TIMEOUT);
+        });
+    }
+
+    if (toggleCamLedBtn) {
+        toggleCamLedBtn.addEventListener('click', () => {
+            if (ledToggleTimeoutId) {
+                console.log("LED toggle cooling down");
+                return;
+            }
+            if (isCamLedActive) {
+                sendCommand({ command: 'CAM_LED_OFF' });
+                toggleCamLedBtn.textContent = 'Turn CAM LED ON'; // Optimistic
+            } else {
+                sendCommand({ command: 'CAM_LED_ON' });
+                toggleCamLedBtn.textContent = 'Turn CAM LED OFF'; // Optimistic
+            }
+            isCamLedActive = !isCamLedActive; // Optimistic toggle
+            toggleCamLedBtn.disabled = true;
+            ledToggleTimeoutId = setTimeout(() => {
+                toggleCamLedBtn.disabled = false;
+                ledToggleTimeoutId = null;
+            }, CAM_TOGGLE_TIMEOUT);
+        });
+    }
 
     if (randomMotionToggleBtn) {
         randomMotionToggleBtn.addEventListener('click', () => {
-             // Toggle based on current known state to provide immediate UI feedback (optional)
             const currentDeviceState = deviceStates[selectedDeviceId] || {};
             const newRandomMotionState = !currentDeviceState.random_motion_active;
-            sendCommand({ command: 'RANDOM_MOTION_TOGGLE' }); // ESP32 handles actual toggle
-            // Optimistically update UI, will be corrected by statusUpdate if needed
+            sendCommand({ command: 'RANDOM_MOTION_TOGGLE' });
             if (deviceStates[selectedDeviceId]) deviceStates[selectedDeviceId].random_motion_active = newRandomMotionState;
             updateUIToggleStates({ random_motion_active: newRandomMotionState });
         });
-    }
-    if (camStreamStartBtn) {
-        camStreamStartBtn.addEventListener('click', () => {
-            sendCommand({ command: 'START_STREAM' });
-            // src is already set in deviceSelect 'change' handler, but this ensures it if called independently
-            if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
-        });
-    }
-    if (camStreamStopBtn) {
-        camStreamStopBtn.addEventListener('click', () => {
-            sendCommand({ command: 'STOP_STREAM' });
-            if (streamImgEl) streamImgEl.src = "#"; // Set to placeholder or hash
-        });
-    }
-    if (camLedOnBtn) {
-        camLedOnBtn.addEventListener('click', () => sendCommand({ command: 'CAM_LED_ON' }));
-    }
-    if (camLedOffBtn) {
-        camLedOffBtn.addEventListener('click', () => sendCommand({ command: 'CAM_LED_OFF' }));
     }
 
     // Initialize

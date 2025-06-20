@@ -61,6 +61,8 @@ String esp32CamIP = "";
 bool esp32CamConnected = false;
 /** @brief Flag indicating if the ESP32CAM is currently streaming video. */
 bool streaming = false;
+/** @brief Tracks the state of the CAM LED. */
+bool camLedActive = false;
 
 
 #define SCREEN_WIDTH 128
@@ -214,6 +216,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 serializeJson(doc, output);
                 webSocket.sendTXT(output);
                 Serial.println("Sent pairing message: " + output);
+                Serial.println("[DEBUG] Calling sendSystemConfig on WebSocket connect.");
                 sendSystemConfig(); // Send initial system config on connect
             }
             break;
@@ -272,11 +275,14 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 } else if (strcmp(command, "CAM_LED_ON") == 0) {
                     Serial2.println("LED_ON");
                     Serial.println("Sent command to ESP32CAM: LED_ON");
+                    camLedActive = true;
                 } else if (strcmp(command, "CAM_LED_OFF") == 0) {
                     Serial2.println("LED_OFF");
                     Serial.println("Sent command to ESP32CAM: LED_OFF");
+                    camLedActive = false;
                 } else if (strcmp(command, "getSystemConfig") == 0) {
-                    Serial.println("Received getSystemConfig command");
+                    Serial.println("[DEBUG] Received 'getSystemConfig' command.");
+                    Serial.println("[DEBUG] Calling sendSystemConfig for getSystemConfig command.");
                     sendSystemConfig();
                 } else if (strcmp(command, "setServoLimit") == 0) {
                     const char* axis = doc["axis"]; // "x" or "y"
@@ -306,10 +312,13 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     Serial.printf("Updated limits: minX=%d, maxX=%d, minY=%d, maxY=%d\n", minX, maxX, minY, maxY);
                     sendSystemConfig(); // Send updated config back
                 } else if (strcmp(command, "addTimer") == 0) {
-                    String startTime = doc["startTime"]; // "HH:MM"
-                    String endTime = doc["endTime"];   // "HH:MM"
-                    Serial.printf("Received addTimer: start=%s, end=%s\n", startTime.c_str(), endTime.c_str());
+                    Serial.println("[DEBUG] Received 'addTimer' command.");
+                    String startTime = doc["startTime"].as<String>(); // "HH:MM"
+                    String endTime = doc["endTime"].as<String>();   // "HH:MM"
+                    Serial.printf("[DEBUG] Parsed startTime: %s, endTime: %s from WebSocket\n", startTime.c_str(), endTime.c_str());
+                    Serial.println("[DEBUG] Calling addTimeSlot from webSocketEvent.");
                     addTimeSlot(startTime, endTime);
+                    Serial.println("[DEBUG] Calling sendSystemConfig after addTimer.");
                     sendSystemConfig(); // Send updated config back
                 } else if (strcmp(command, "deleteTimer") == 0) {
                     int timerIndex = doc["timerIndex"];
@@ -493,27 +502,33 @@ showBongoCat();
   Serial.print("Loaded Max Velocity (Preferences): ");
   Serial.println(maxVel);
 
+  // Load num_timers first to know how many slots were previously saved.
+  // This value might be adjusted later if some slots are found to be invalid.
+  numTimeSlots = preferences.getInt("num_timers", 0);
+  Serial.printf("[DEBUG] Loaded num_timers from preferences: %d\n", numTimeSlots);
+
   // Revised Timer Loading Logic
   int validSlotsCount = 0;
-  for (int i = 0; i < MAX_TIMERS; i++) {
+  for (int i = 0; i < MAX_TIMERS; i++) { // Iterate up to MAX_TIMERS to check all possible stored slots
       String baseKey = "timer_" + String(i);
       int startMins = preferences.getInt((baseKey + "_start").c_str(), -1);
       int stopMins = preferences.getInt((baseKey + "_stop").c_str(), -1);
+      Serial.printf("[DEBUG] Slot %d: Read startMins=%d, stopMins=%d from Prefs\n", i, startMins, stopMins);
 
       if (startMins != -1 && stopMins != -1 && startMins >=0 && startMins < (24*60) && stopMins >=0 && stopMins < (24*60)) { // Only load if both are valid and within range
           if (validSlotsCount < i) { // Compact valid timers to the front of the array
               timeSlots[validSlotsCount].startTimeMinutes = startMins;
               timeSlots[validSlotsCount].stopTimeMinutes = stopMins;
           } else { // validSlotsCount == i
-               timeSlots[i].startTimeMinutes = startMins;
-               timeSlots[i].stopTimeMinutes = stopMins;
+               timeSlots[i].startTimeMinutes = startMins; // Or use validSlotsCount index here too for consistency
+               timeSlots[i].stopTimeMinutes = stopMins;  // timeSlots[validSlotsCount] would also work
           }
           timeSlots[validSlotsCount].active = false; // Initialize as not active
-          Serial.printf("Loaded Valid Timer %d (from slot %d): Start=%d, Stop=%d\n", validSlotsCount, i, timeSlots[validSlotsCount].startTimeMinutes, timeSlots[validSlotsCount].stopTimeMinutes);
-          validSlotsCount++;
+          validSlotsCount++; // Increment for each valid timer found and loaded
+          Serial.printf("[DEBUG] Loaded valid timer %d: Start=%d, Stop=%d. validSlotsCount is now %d\n", validSlotsCount -1, timeSlots[validSlotsCount-1].startTimeMinutes, timeSlots[validSlotsCount-1].stopTimeMinutes, validSlotsCount);
       } else {
-          // This slot is invalid or partially invalid in preferences.
-          // It will be skipped and not counted in numTimeSlots.
+          // This slot is invalid or partially invalid in preferences, or beyond the previously saved numTimeSlots.
+          // It will be skipped and not counted in numTimeSlots if it's one of the initially loaded numTimeSlots.
           // If we compact, any old data at timeSlots[i] from a previous run will be overwritten by a valid timer
           // or left as is if no more valid timers are found.
           // If we want to ensure all non-loaded slots in timeSlots array are -1, we could explicitly set them:
@@ -522,10 +537,11 @@ showBongoCat();
           // However, the loop for schedule checking only goes up to numTimeSlots.
       }
   }
-  numTimeSlots = validSlotsCount;
-  preferences.putInt("num_timers", numTimeSlots); // Update the stored count of timers to reflect only valid ones.
-  Serial.print("Actual numTimeSlots set to: ");
-  Serial.println(numTimeSlots);
+  numTimeSlots = validSlotsCount; // Set numTimeSlots to the actual number of valid timers found
+  Serial.printf("[DEBUG] Final numTimeSlots after loading and validation: %d\n", numTimeSlots);
+
+  Serial.printf("[DEBUG] Saving num_timers=%d back to preferences.\n", numTimeSlots);
+  preferences.putInt("num_timers", numTimeSlots); // Update the stored count of timers to reflect only valid ones found now.
 
   // preferences.end(); // Moved this call to after all preference reads/writes in setup if it was here.
                       // It seems preferences.begin() is called once, and end() should be at the very end of setup's preference usage.
@@ -659,21 +675,24 @@ void sendSystemConfig() {
 
     String output;
     serializeJson(doc, output);
+    Serial.println("[DEBUG] Attempting to send systemConfig via WebSocket.");
+    Serial.println("JSON to send: " + output);
     webSocket.sendTXT(output);
-    Serial.println("Sent systemConfig: " + output);
+    // Serial.println("Sent systemConfig: " + output); // Original log, can be removed or kept
 }
 
 void saveTimersToPreferences() {
+  Serial.println("[DEBUG] saveTimersToPreferences called.");
   preferences.begin("servo_config", false); // Begin the session here, non-read-only
 
+  Serial.printf("[DEBUG] Saving num_timers in saveTimersToPreferences: %d\n", numTimeSlots);
   preferences.putInt("num_timers", numTimeSlots);
-  Serial.printf("Saved num_timers: %d\n", numTimeSlots);
   // Serial.printf("Read back num_timers: %d\n", preferences.getInt("num_timers", -99)); // Optional: Verification
 
   for (int i = 0; i < numTimeSlots; i++) {
     String startKey = "timer_" + String(i) + "_start";
     String stopKey = "timer_" + String(i) + "_stop";
-
+    Serial.printf("[DEBUG] Saving timer %d to Prefs: Start=%d, Stop=%d\n", i, timeSlots[i].startTimeMinutes, timeSlots[i].stopTimeMinutes);
     preferences.putInt(startKey.c_str(), timeSlots[i].startTimeMinutes);
     // Serial.printf("Saved %s: %d\n", startKey.c_str(), timeSlots[i].startTimeMinutes);
     // Serial.printf("Read back %s: %d\n", startKey.c_str(), preferences.getInt(startKey.c_str(), -99)); // Optional
@@ -688,13 +707,24 @@ void saveTimersToPreferences() {
 }
 
 void addTimeSlot(String startTimeStr, String stopTimeStr) {
+  Serial.printf("[DEBUG] addTimeSlot called with startTimeStr: %s, stopTimeStr: %s\n", startTimeStr.c_str(), stopTimeStr.c_str());
   if (numTimeSlots < MAX_TIMERS) {
     int startTimeMinutes = timeToMinutes(startTimeStr);
     int stopTimeMinutes = timeToMinutes(stopTimeStr);
+    Serial.printf("[DEBUG] Converted to startTimeMinutes: %d, stopTimeMinutes: %d\n", startTimeMinutes, stopTimeMinutes);
+
+    // Basic validation for converted minutes
+    if (startTimeMinutes == -1 || stopTimeMinutes == -1) {
+        Serial.println("[DEBUG] Invalid time string provided to addTimeSlot. Timer not added.");
+        return;
+    }
+
     timeSlots[numTimeSlots].startTimeMinutes = startTimeMinutes;
     timeSlots[numTimeSlots].stopTimeMinutes = stopTimeMinutes;
     timeSlots[numTimeSlots].active = false; // Ensure new timers are initially inactive
     numTimeSlots++; // Increment numTimeSlots FIRST
+    Serial.printf("[DEBUG] numTimeSlots incremented to: %d\n", numTimeSlots);
+    Serial.println("[DEBUG] About to save timers in addTimeSlot.");
     saveTimersToPreferences(); // Now save with the updated count
     Serial.printf("Added new timeslot. Total slots: %d. Start: %s, End: %s\n", numTimeSlots, startTimeStr.c_str(), stopTimeStr.c_str());
   } else {
@@ -1154,6 +1184,7 @@ void loop() {
     data["is_scheduled_movement_active"] = isScheduledMovementActive;
     data["esp32cam_connected"] = esp32CamConnected;
     data["esp32cam_streaming"] = streaming;
+    data["cam_led_active"] = camLedActive; // Include CAM LED state
     // Add servo limits to status update
     data["minX"] = minX;
     data["maxX"] = maxX;
