@@ -68,6 +68,10 @@ document.addEventListener('DOMContentLoaded', () => {
     /** @type {Object<string, Object>} Stores the last known state for each device. deviceId -> { stateKey: stateValue }. */
     let deviceStates = {}; // { deviceId: { key: value } }
 
+    // Laser control during X/Y adjustment
+    let laserOffTimeoutId = null;
+    const LASER_OFF_DELAY = 10000; // 10 seconds
+
     // State variables and timeouts for CAM controls
     let isStreamActive = false;
     let streamToggleTimeoutId = null;
@@ -317,6 +321,12 @@ document.addEventListener('DOMContentLoaded', () => {
             isCamLedActive = false;
             if (streamImgEl) streamImgEl.src = "#";
 
+            // Laser safety: If WebSocket closes and laser timer was active, clear it.
+            // turnLaserOff() already has a check for selectedDeviceId, so it won't send command if no device.
+            if (laserOffTimeoutId) {
+                clearTimeout(laserOffTimeoutId); // Just clear, don't try to send command as socket is closed.
+                laserOffTimeoutId = null;
+            }
 
             // Avoid rapid reconnection loops if server is truly down
             setTimeout(connectWebSocket, 5000 + Math.random() * 1000);
@@ -527,6 +537,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (streamImgEl) streamImgEl.src = "#";
                 if (timerListEl) timerListEl.innerHTML = ''; // Clear timers
 
+                // Laser safety: If a device is deselected and laser timer was active, turn laser off
+                if (laserOffTimeoutId) {
+                    turnLaserOff();
+                }
+
                 // Clear CAM toggle timeouts and reset states
                 if (streamToggleTimeoutId) { clearTimeout(streamToggleTimeoutId); streamToggleTimeoutId = null; }
                 if (ledToggleTimeoutId) { clearTimeout(ledToggleTimeoutId); ledToggleTimeoutId = null; }
@@ -545,6 +560,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Old servoXSliderEl and servoYSliderEl event listeners are removed as elements are gone.
+
+    function turnLaserOff() {
+        if (selectedDeviceId) { // Only send if a device is selected
+            console.log('[DEBUG] Laser auto-off timer expired. Turning laser OFF.');
+            sendCommand({ command: 'LASER_OFF' }); // Assuming this is the command
+        }
+        if (laserOffTimeoutId) {
+            clearTimeout(laserOffTimeoutId);
+            laserOffTimeoutId = null;
+        }
+    }
+
+    function turnLaserOnWithTimeout() {
+        if (!selectedDeviceId) return; // Don't try to turn laser on if no device selected
+
+        console.log('[DEBUG] X/Y adjustment detected. Turning laser ON and resetting OFF timer.');
+        sendCommand({ command: 'LASER_ON' }); // Assuming this is the command
+
+        if (laserOffTimeoutId) {
+            clearTimeout(laserOffTimeoutId);
+        }
+        laserOffTimeoutId = setTimeout(turnLaserOff, LASER_OFF_DELAY);
+    }
 
     // Timer management
     if (addTimerBtn) {
@@ -750,6 +788,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 updateDualRangeSliderUI(xElements, minVal, maxVal, 0, 180);
+                turnLaserOnWithTimeout(); // Call laser function on input
             });
 
             input.addEventListener('change', (e) => {
@@ -798,6 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (e.target.id === servoXMaxValueEl.id) {
                     sendCommand({ command: 'servoX', value: maxVal });
                 }
+                turnLaserOnWithTimeout(); // Call laser function on change
             });
         });
         // Initial UI setup for X from its default HTML values
@@ -830,6 +870,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // For Y, let's ensure the values stay broadly within a 0-180 context for the slider mechanism,
                 // but the actual effective limits (like 45-135) will be from initial values or systemConfig.
                 updateDualRangeSliderUI(yElements, minVal, maxVal, 0, 180);
+                turnLaserOnWithTimeout(); // Call laser function on input
             });
 
             input.addEventListener('change', (e) => {
@@ -878,6 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (e.target.id === servoYMaxValueEl.id) {
                     sendCommand({ command: 'servoY', value: maxVal });
                 }
+                turnLaserOnWithTimeout(); // Call laser function on change
             });
         });
         // Initial UI setup for Y from its default HTML values
