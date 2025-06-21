@@ -338,7 +338,46 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
                         deleteTimeSlot(timerIndex);
                         sendSystemConfig();
-                    } else {
+                    } else if (strcmp(command, "setPreference") == 0) {
+                        const char* key = doc["key"];
+                        if (key) {
+                            preferences.begin("servo_config", false);
+                            bool preferenceChanged = false;
+                            if (strcmp(key, "min_x") == 0) { minX = doc["value"].as<int>(); preferences.putInt("min_x", minX); preferenceChanged = true; }
+                            else if (strcmp(key, "max_x") == 0) { maxX = doc["value"].as<int>(); preferences.putInt("max_x", maxX); preferenceChanged = true; }
+                            else if (strcmp(key, "min_y") == 0) { minY = doc["value"].as<int>(); preferences.putInt("min_y", minY); preferenceChanged = true; }
+                            else if (strcmp(key, "max_y") == 0) { maxY = doc["value"].as<int>(); preferences.putInt("max_y", maxY); preferenceChanged = true; }
+                            else if (strcmp(key, "min_vel") == 0) { minVel = doc["value"].as<int>(); preferences.putInt("min_vel", minVel); preferenceChanged = true; }
+                            else if (strcmp(key, "max_vel") == 0) { maxVel = doc["value"].as<int>(); preferences.putInt("max_vel", maxVel); preferenceChanged = true; }
+                            else if (strcmp(key, "timezone") == 0) {
+                                timeZoneOffset = doc["value"].as<int>();
+                                preferences.putInt("timezone", timeZoneOffset);
+                                timeClient.setTimeOffset(timeZoneOffset * 3600); // Apply immediately
+                                timeClient.update(); // Attempt to update time with new offset
+                                lastNTPUpdateTime = millis(); // Reset NTP update timer
+                                preferenceChanged = true;
+                            }
+                            else if (strcmp(key, "ntp_interval") == 0) {
+                                ntpUpdateInterval = doc["value"].as<long>(); // Value is in ms from web UI
+                                preferences.putLong("ntp_interval", ntpUpdateInterval);
+                                // NTPClient doesn't have a setUpdateInterval method after begin.
+                                // The new interval will be used on the next check in loop().
+                                preferenceChanged = true;
+                            }
+                            else { Serial.printf("[WSc] Unknown preference key: %s\n", key); }
+
+                            if (preferenceChanged) {
+                                Serial.printf("[WSc] Preference updated: %s = %s\n", key, doc["value"].as<String>().c_str());
+                                preferences.end();
+                                sendSystemConfig(); // Send updated config to all clients
+                            } else {
+                                preferences.end(); // Still need to end if no known key matched
+                            }
+                        } else {
+                            Serial.println("[WSc] setPreference command missing 'key'.");
+                        }
+                    }
+                    else {
                         Serial.printf("[DEBUG] Unknown standard command: %s\n", command);
                     }
                 } else {
@@ -687,6 +726,8 @@ showBongoCat();
   // Optional: for SSL, if your server uses a self-signed cert or you want to pin.
   // webSocket.setFingerprint("...");
 
+  preferences.end(); // End preferences access after all setup loading/initial saving.
+
     // IMPORTANT: WebSocket Receive Buffer Size for addTimer command
     // The "addTimer" command payload is being truncated, likely due to the default
     // WebSocket client receive buffer size being too small (observed truncation at ~22 bytes).
@@ -740,12 +781,17 @@ void sendSystemConfig() {
     doc["deviceId"] = deviceId; // <--- ENSURE THIS LINE IS PRESENT AND CORRECT
 
     // Nest the actual configuration data under a 'config' key
-    JsonObject config_obj = doc.createNestedObject("config"); // Renamed to avoid conflict if 'config' is a global
-    config_obj["minX"] = minX;
-    config_obj["maxX"] = maxX;
-    config_obj["minY"] = minY;
-    config_obj["maxY"] = maxY;
-    // config_obj["cam_led_active"] = camLedActive; // Optional: cam_led_active is in statusUpdate primarily
+    JsonObject config_obj = doc.createNestedObject("config");
+    config_obj["min_x"] = minX; // Use snake_case
+    config_obj["max_x"] = maxX; // Use snake_case
+    config_obj["min_y"] = minY; // Use snake_case
+    config_obj["max_y"] = maxY; // Use snake_case
+
+    config_obj["min_vel"] = minVel;
+    config_obj["max_vel"] = maxVel;
+    config_obj["timezone"] = timeZoneOffset; // Already an int (hours)
+    config_obj["ntp_interval"] = ntpUpdateInterval; // Already a long (ms)
+    // config_obj["cam_led_active"] = camLedActive;
 
     JsonArray timersArray = config_obj.createNestedArray("timers");
     for (int i = 0; i < numTimeSlots; i++) {
