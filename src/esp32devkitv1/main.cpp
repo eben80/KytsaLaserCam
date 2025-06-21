@@ -609,6 +609,11 @@ showBongoCat();
   tzset(); // Apply the TZ setting
   Serial.println("System TZ applied from preferences.");
 
+  // Initialize NTP Client immediately after setting TZ, so it uses correct offset logic from start
+  timeClient.begin();
+  timeClient.setTimeOffset(0); // Offset is 0 because TZ env var + localtime_r handle localization
+  Serial.println("NTP Client initialized after TZ setting.");
+
   // Load num_timers first to know how many slots were previously saved.
   // This value might be adjusted later if some slots are found to be invalid.
   numTimeSlots = preferences.getInt("num_timers", 0);
@@ -709,20 +714,18 @@ showBongoCat();
     configTime(0, 0, "pool.ntp.org");
     Serial.printf("System time configured with NTP server 'pool.ntp.org'. TZ set by environment: %s\n", timeZonePosixString.c_str());
 
-    // Initialize NTP Client
-    // timeClient.setTimeOffset should be 0 because localtime_r will use the TZ environment variable.
-    timeClient.begin();
-    timeClient.setTimeOffset(0);
-    Serial.println("NTP Client started. Time offset 0, using system TZ.");
+    // NTP Client (timeClient) has already been initialized (begin() and setTimeOffset(0))
+    // immediately after TZ was set from preferences.
 
     // Immediately try to get the time at startup
+    Serial.println("Attempting initial NTP time synchronization...");
     if (!timeClient.update()) {
-      Serial.println("Failed to get NTP time at startup.");
+      Serial.println("Failed to get NTP time at startup (will retry in loop).");
     } else {
       Serial.println("NTP time synchronized at startup.");
     }
-    lastNTPUpdateTime = millis(); // Initialize the last update time
-    updateDisplay(); // Call updateDisplay once after initial NTP sync for logging
+    lastNTPUpdateTime = millis(); // Initialize the last update time, regardless of initial sync success
+    // updateDisplay(); // Removed: First display update will be handled by loop()
   }
 
 
