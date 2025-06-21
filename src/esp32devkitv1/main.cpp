@@ -715,6 +715,9 @@ showBongoCat();
     Serial.println("Reinforcing tzset() before NTP client operations.");
     tzset();
 
+    Serial.println("Adding 1-second delay before NTPClient.begin()...");
+    delay(1000);
+
     // Initialize NTP Client now that WiFi is connected and system time basics are set up.
     timeClient.begin();
     timeClient.setTimeOffset(0); // Offset is 0 because TZ env var + localtime_r handle localization
@@ -966,8 +969,8 @@ void updateDisplay() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
 
-  // char *tz_env = getenv("TZ"); // Logging removed
-  // Serial.printf("updateDisplay: System TZ environment variable: %s\n", tz_env ? tz_env : "NULL"); // Logging removed
+  char *current_tz_env = getenv("TZ");
+  Serial.printf("[updateDisplay] Current getenv(\"TZ\"): %s\n", current_tz_env ? current_tz_env : "NULL");
 
   if (WiFi.status() == WL_CONNECTED) {
     display.print("IP: ");
@@ -980,16 +983,15 @@ void updateDisplay() {
 
     if (now < 1609459200L) { // Check if time is past Jan 1, 2021 UTC (example threshold)
         display.println("Time not set");
-        // Serial.println("updateDisplay: Time appears not to be set by NTP yet."); // Logging removed
+        Serial.printf("[updateDisplay] Time not set. Raw time_t: %lu\n", (unsigned long)now);
     } else {
+        Serial.printf("[updateDisplay] Raw time_t 'now': %lu\n", (unsigned long)now);
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
-        // Log detailed timeinfo
-        // Serial.printf("updateDisplay: timeinfo: year=%d, mon=%d, day=%d, hour=%d, min=%d, sec=%d, isdst=%d\n", // Logging removed
-        //               timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, // Logging removed
-        //               timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, // Logging removed
-        //               timeinfo.tm_isdst); // Logging removed
-                      // Removed tm_gmtoff and tm_zone as they are not standard
+        Serial.printf("[updateDisplay] timeinfo after localtime_r: Y=%d, M=%d, D=%d, H=%d, M=%d, S=%d, DST=%d\n",
+                      timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+                      timeinfo.tm_isdst);
 
         char buffer[12]; // Buffer for HH:MM:SS + null
         strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
