@@ -206,13 +206,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Also, update the dual range sliders from systemConfig.
 
                         // Update X-Axis from systemConfig
-                        if (message.config.minX !== undefined && message.config.maxX !== undefined) {
-                            const xElements = { // Definition updated: no positionSliderEl, positionValueEl
+                        if (message.config.min_x !== undefined && message.config.max_x !== undefined) { // Changed to snake_case
+                            const xElements = {
                                 minRangeEl: servoXMinRangeEl, maxRangeEl: servoXMaxRangeEl,
                                 rangeSelectedEl: servoXRangeSelectedEl,
                                 minValueEl: servoXMinValueEl, maxValueEl: servoXMaxValueEl
                             };
-                            updateDualRangeSliderUI(xElements, parseInt(message.config.minX), parseInt(message.config.maxX), 0, 180); // Corrected: Pass 0, 180
+                            updateDualRangeSliderUI(xElements, parseInt(message.config.min_x), parseInt(message.config.max_x), 0, 180);
                         }
                         // Update X position slider value - REMOVED as slider is gone
                         // if (servoXSliderEl && servoXValueEl && message.config.servoX_pos !== undefined) {
@@ -223,13 +223,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         // }
 
                         // Update Y-Axis from systemConfig
-                        if (message.config.minY !== undefined && message.config.maxY !== undefined) {
-                            const yElements = { // Definition updated: no positionSliderEl, positionValueEl
+                        if (message.config.min_y !== undefined && message.config.max_y !== undefined) { // Changed to snake_case
+                            const yElements = {
                                 minRangeEl: servoYMinRangeEl, maxRangeEl: servoYMaxRangeEl,
                                 rangeSelectedEl: servoYRangeSelectedEl,
                                 minValueEl: servoYMinValueEl, maxValueEl: servoYMaxValueEl
                             };
-                            updateDualRangeSliderUI(yElements, parseInt(message.config.minY), parseInt(message.config.maxY), 0, 180); // Corrected: Pass 0, 180
+                            updateDualRangeSliderUI(yElements, parseInt(message.config.min_y), parseInt(message.config.max_y), 0, 180);
                         }
                         // Update Y position slider value - REMOVED as slider is gone
 
@@ -244,9 +244,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         // Update Timezone from systemConfig
-                        if (message.config.timezone !== undefined && timezoneSelectEl) { // Expect 'timezone' (integer hours)
-                            timezoneSelectEl.value = message.config.timezone;
+                        if (message.config.timezone_posix !== undefined && timezoneSelectEl) { // Expect 'timezone_posix' (string)
+                            timezoneSelectEl.value = message.config.timezone_posix;
                         }
+                        // Old integer offset handling removed/commented if any:
+                        // if (message.config.timezone !== undefined && timezoneSelectEl) {
+                        //     timezoneSelectEl.value = message.config.timezone;
+                        // }
 
                         // Update NTP Interval from systemConfig
                         if (message.config.ntp_interval !== undefined && ntpIntervalSelectEl) { // Expect 'ntp_interval' (milliseconds)
@@ -840,8 +844,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 turnLaserOnWithTimeout(); // Call laser function on change
             });
         });
-        // Initial UI setup for X from its default HTML values
-        updateDualRangeSliderUI(xElements, parseInt(servoXMinRangeEl.value), parseInt(servoXMaxRangeEl.value), 0, 180);
+        // Initial UI setup for X from its default HTML values - REMOVED
+        // Sliders will be initialized by systemConfig message after device selection.
     }
 
     // Setup Y-Axis Dual Range Slider
@@ -922,8 +926,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 turnLaserOnWithTimeout(); // Call laser function on change
             });
         });
-        // Initial UI setup for Y from its default HTML values
-        updateDualRangeSliderUI(yElements, parseInt(servoYMinRangeEl.value), parseInt(servoYMaxRangeEl.value), 0, 180);
+        // Initial UI setup for Y from its default HTML values - REMOVED
+        // Sliders will be initialized by systemConfig message after device selection.
     }
 
     // Setup Velocity Dual Range Slider
@@ -1036,38 +1040,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateTimezoneSelector() {
         if (!timezoneSelectEl) return;
         const timezones = [
-            { name: "UTC-12", value: -12 },
-            { name: "UTC-11", value: -11 },
-            { name: "UTC-10 (Hawaii)", value: -10 },
-            { name: "UTC-9 (Alaska)", value: -9 },
-            { name: "UTC-8 (PST)", value: -8 },
-            { name: "UTC-7 (MST)", value: -7 },
-            { name: "UTC-6 (CST)", value: -6 },
-            { name: "UTC-5 (EST)", value: -5 },
-            { name: "UTC-4 (Atlantic)", value: -4 },
-            { name: "UTC-3", value: -3 },
-            { name: "UTC-2", value: -2 },
-            { name: "UTC-1", value: -1 },
-            { name: "UTC+0 (GMT/London)", value: 0 },
-            { name: "UTC+1 (CET/Berlin)", value: 1 },
-            { name: "UTC+2 (EET/Kyiv - ESP32 Default)", value: 2 },
-            { name: "UTC+3 (Moscow)", value: 3 },
-            { name: "UTC+4", value: 4 },
-            { name: "UTC+5", value: 5 },
-            { name: "UTC+6", value: 6 },
-            { name: "UTC+7", value: 7 },
-            { name: "UTC+8 (Perth/Beijing)", value: 8 },
-            { name: "UTC+9 (Tokyo)", value: 9 },
-            { name: "UTC+10 (Sydney AEST)", value: 10 },
-            { name: "UTC+11", value: 11 },
-            { name: "UTC+12", value: 12 },
-            { name: "UTC+13", value: 13 },
-            { name: "UTC+14", value: 14 },
+            { name: "UTC", value: "UTC0" },
+            { name: "London (GMT/BST)", value: "GMT0BST,M3.5.0/1,M10.5.0/2" },
+            { name: "Berlin (CET/CEST)", value: "CET-1CEST,M3.5.0/2,M10.5.0/3" },
+            { name: "New York (EST/EDT)", value: "EST5EDT,M3.2.0/2,M11.1.0/2" },
+            { name: "Chicago (CST/CDT)", value: "CST6CDT,M3.2.0/2,M11.1.0/2" },
+            { name: "Denver (MST/MDT)", value: "MST7MDT,M3.2.0/2,M11.1.0/2" },
+            { name: "Los Angeles (PST/PDT)", value: "PST8PDT,M3.2.0/2,M11.1.0/2" },
+            { name: "Tokyo (JST)", value: "JST-9" },
+            { name: "Sydney (AEST/AEDT)", value: "AEST-10AEDT,M10.1.0/2,M4.1.0/3" }
+            // Add more as needed, from a reliable source for POSIX TZ strings
         ];
         timezoneSelectEl.innerHTML = ''; // Clear loading/existing options
         timezones.forEach(tz => {
             const option = document.createElement('option');
-            option.value = tz.value; // Integer hour offset
+            option.value = tz.value; // POSIX TZ String
             option.textContent = tz.name;
             timezoneSelectEl.appendChild(option);
         });
@@ -1098,17 +1085,17 @@ document.addEventListener('DOMContentLoaded', () => {
         timezoneSelectEl.addEventListener('change', () => {
             if (!selectedDeviceId) {
                 alert('Please select a device first.');
-                // Attempt to revert to last known state for this device, or a common default like '0' (UTC)
                 const lastKnownState = deviceStates[selectedDeviceId];
-                if (lastKnownState && lastKnownState.timezone !== undefined) {
-                    timezoneSelectEl.value = lastKnownState.timezone;
+                // Revert to last known POSIX string or default to 'UTC0'
+                if (lastKnownState && lastKnownState.timezone_posix !== undefined) {
+                    timezoneSelectEl.value = lastKnownState.timezone_posix;
                 } else {
-                    timezoneSelectEl.value = '0'; // Default to UTC if no state known
+                    timezoneSelectEl.value = 'UTC0'; // Default POSIX string
                 }
                 return;
             }
-            // ESP32 expects preference key "timezone" and an integer value (hours)
-            sendCommand({ command: 'setPreference', key: 'timezone', value: parseInt(timezoneSelectEl.value) });
+            // Send POSIX string with key 'timezone_posix'
+            sendCommand({ command: 'setPreference', key: 'timezone_posix', value: timezoneSelectEl.value });
         });
     }
 
