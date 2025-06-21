@@ -45,8 +45,8 @@
             </div>
 
             <div class="control-group">
-                <h3><button id="toggleServoConfigBtn" class="toggle-btn">+/-</button> Servo Configuration</h3>
-                <div id="servoConfigContent" style="display: none;">
+                <h3><button id="toggleDeviceConfigBtn" class="toggle-btn">+/-</button> Device Configuration</h3>
+                <div id="deviceConfigContent" style="display: none;">
                     <h4>X-Axis Limits</h4>
                     <div class="range-slider-container">
                         <div class="range-slider">
@@ -84,6 +84,38 @@
                         </div>
                     </div>
                     <!-- Servo Y Position Slider Removed -->
+
+                    <hr> <!-- Separator -->
+
+                    <h4>Velocity Limits (0-3000)</h4>
+                    <div class="range-slider-container">
+                        <div class="range-slider">
+                            <span class="range-selected" id="velRangeSelected"></span>
+                        </div>
+                        <div class="range-input">
+                            <input type="range" id="velMinRange" min="0" max="3000" value="800" step="10" disabled>
+                            <input type="range" id="velMaxRange" min="0" max="3000" value="2000" step="10" disabled>
+                        </div>
+                        <div class="range-values">
+                            <label for="velMinValue">Min:</label>
+                            <input type="number" id="velMinValue" value="800" min="0" max="3000" step="10" disabled>
+                            <label for="velMaxValue">Max:</label>
+                            <input type="number" id="velMaxValue" value="2000" min="0" max="3000" step="10" disabled>
+                        </div>
+                    </div>
+
+                    <hr> <!-- Separator -->
+
+                    <div class="config-item">
+                        <label for="timezoneSelect">Timezone:</label>
+                        <select id="timezoneSelect" disabled><option value="">Loading...</option></select>
+                    </div>
+
+                    <div class="config-item">
+                        <label for="ntpIntervalSelect">NTP Update Interval:</label>
+                        <select id="ntpIntervalSelect" disabled><option value="">Loading...</option></select>
+                    </div>
+
                 </div>
             </div>
 

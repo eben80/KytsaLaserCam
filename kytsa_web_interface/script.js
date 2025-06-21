@@ -34,15 +34,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleCamLedBtn = document.getElementById('toggleCamLedBtn');
 
     // Collapsible section elements
-    const toggleServoConfigBtn = document.getElementById('toggleServoConfigBtn');
-    const servoConfigContent = document.getElementById('servoConfigContent');
+    const toggleDeviceConfigBtn = document.getElementById('toggleDeviceConfigBtn'); // Renamed
+    const deviceConfigContent = document.getElementById('deviceConfigContent'); // Renamed
     const toggleDeviceStatusBtn = document.getElementById('toggleDeviceStatusBtn');
     const deviceStatusContent = document.getElementById('deviceStatusContent');
 
+    // Velocity Dual Range Slider Elements
+    const velMinRangeEl = document.getElementById('velMinRange');
+    const velMaxRangeEl = document.getElementById('velMaxRange');
+    const velRangeSelectedEl = document.getElementById('velRangeSelected');
+    const velMinValueEl = document.getElementById('velMinValue');
+    const velMaxValueEl = document.getElementById('velMaxValue');
+
+    // Timezone and NTP Selectors
+    const timezoneSelectEl = document.getElementById('timezoneSelect');
+    const ntpIntervalSelectEl = document.getElementById('ntpIntervalSelect');
+
     const allControls = [
-        // servoXSliderEl, servoYSliderEl, // Main position sliders REMOVED
-        servoXMinRangeEl, servoXMaxRangeEl, servoXMinValueEl, servoXMaxValueEl, // X-axis range controls
-        servoYMinRangeEl, servoYMaxRangeEl, servoYMinValueEl, servoYMaxValueEl, // Y-axis range controls
+        servoXMinRangeEl, servoXMaxRangeEl, servoXMinValueEl, servoXMaxValueEl,
+        servoYMinRangeEl, servoYMaxRangeEl, servoYMinValueEl, servoYMaxValueEl,
+        velMinRangeEl, velMaxRangeEl, velMinValueEl, velMaxValueEl, // Velocity controls
+        timezoneSelectEl, ntpIntervalSelectEl, // New selectors
         timerStartTimeEl, timerEndTimeEl, addTimerBtn,
         randomMotionToggleBtn, toggleCamStreamBtn, toggleCamLedBtn
     ];
@@ -216,12 +228,26 @@ document.addEventListener('DOMContentLoaded', () => {
                             updateDualRangeSliderUI(yElements, parseInt(message.config.minY), parseInt(message.config.maxY), 'Y');
                         }
                         // Update Y position slider value - REMOVED as slider is gone
-                        // if (servoYSliderEl && servoYValueEl && message.config.servoY_pos !== undefined) {
-                        //     servoYSliderEl.value = message.config.servoY_pos;
-                        //     servoYValueEl.textContent = servoYSliderEl.value;
-                        // } else if (servoYSliderEl && servoYValueEl) {
-                        //     servoYValueEl.textContent = servoYSliderEl.value;
-                        // }
+
+                        // Update Velocity limits from systemConfig
+                        if (message.config.minVel !== undefined && message.config.maxVel !== undefined && velMinRangeEl) { // Check velMinRangeEl as a proxy for all vel elements
+                            const velElements = {
+                                minRangeEl: velMinRangeEl, maxRangeEl: velMaxRangeEl,
+                                rangeSelectedEl: velRangeSelectedEl,
+                                minValueEl: velMinValueEl, maxValueEl: velMaxValueEl
+                            };
+                            updateDualRangeSliderUI(velElements, parseInt(message.config.minVel), parseInt(message.config.maxVel), 0, 3000);
+                        }
+
+                        // Update Timezone from systemConfig
+                        if (message.config.timezoneName !== undefined && timezoneSelectEl) {
+                            timezoneSelectEl.value = message.config.timezoneName;
+                        }
+
+                        // Update NTP Interval from systemConfig
+                        if (message.config.ntpUpdateInterval !== undefined && ntpIntervalSelectEl) {
+                            ntpIntervalSelectEl.value = message.config.ntpUpdateInterval;
+                        }
 
                         // Update CAM button states if present in systemConfig.config
                         // ESP32's sendSystemConfig currently does not include these.
@@ -656,14 +682,16 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {HTMLInputElement} elements.maxValueEl - Max number input.
      * @param {number} newMin - The new minimum value for the range.
      * @param {number} newMax - The new maximum value for the range.
-     * @param {string} axisPrefix - 'X' or 'Y' for overall slider limits (e.g., 0-180 for X).
+     * @param {number} overallSliderMin - The absolute minimum value this slider can represent.
+     * @param {number} overallSliderMax - The absolute maximum value this slider can represent.
      */
-    function updateDualRangeSliderUI(elements, newMin, newMax, axisPrefix) {
-        const overallMin = (axisPrefix === 'X') ? 0 : 0;
-        const overallMax = (axisPrefix === 'X') ? 180 : 180;
+    function updateDualRangeSliderUI(elements, newMin, newMax, overallSliderMin, overallSliderMax) {
+        // Ensure overallSliderMin and overallSliderMax are numbers, default if not
+        overallSliderMin = typeof overallSliderMin === 'number' ? overallSliderMin : 0;
+        overallSliderMax = typeof overallSliderMax === 'number' ? overallSliderMax : 180; // Default to X/Y like range
 
-        newMin = Math.max(overallMin, Math.min(newMin, overallMax - RANGE_MIN_DIFFERENCE));
-        newMax = Math.min(overallMax, Math.max(newMax, overallMin + RANGE_MIN_DIFFERENCE));
+        newMin = Math.max(overallSliderMin, Math.min(newMin, overallSliderMax - RANGE_MIN_DIFFERENCE));
+        newMax = Math.min(overallSliderMax, Math.max(newMax, overallSliderMin + RANGE_MIN_DIFFERENCE));
 
         if (newMax - newMin < RANGE_MIN_DIFFERENCE) {
             // This logic might need refinement based on which input triggered the call,
@@ -721,7 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         servoXMaxRangeEl.value = maxVal; // Adjust
                     }
                 }
-                updateDualRangeSliderUI(xElements, minVal, maxVal, 'X');
+                updateDualRangeSliderUI(xElements, minVal, maxVal, 0, 180);
             });
 
             input.addEventListener('change', (e) => {
@@ -759,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     maxVal = Math.min(180, Math.max(maxVal, 0 + RANGE_MIN_DIFFERENCE));
                 }
 
-                updateDualRangeSliderUI(xElements, minVal, maxVal, 'X');
+                updateDualRangeSliderUI(xElements, minVal, maxVal, 0, 180);
                 // Send limit commands
                 sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'min', value: minVal });
                 sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'max', value: maxVal });
@@ -773,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
         // Initial UI setup for X from its default HTML values
-        updateDualRangeSliderUI(xElements, parseInt(servoXMinRangeEl.value), parseInt(servoXMaxRangeEl.value), 'X');
+        updateDualRangeSliderUI(xElements, parseInt(servoXMinRangeEl.value), parseInt(servoXMaxRangeEl.value), 0, 180);
     }
 
     // Setup Y-Axis Dual Range Slider
@@ -801,7 +829,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 // For Y, let's ensure the values stay broadly within a 0-180 context for the slider mechanism,
                 // but the actual effective limits (like 45-135) will be from initial values or systemConfig.
-                updateDualRangeSliderUI(yElements, minVal, maxVal, 'Y');
+                updateDualRangeSliderUI(yElements, minVal, maxVal, 0, 180);
             });
 
             input.addEventListener('change', (e) => {
@@ -839,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     maxVal = Math.min(180, Math.max(maxVal, 0 + RANGE_MIN_DIFFERENCE));
                 }
 
-                updateDualRangeSliderUI(yElements, minVal, maxVal, 'Y');
+                updateDualRangeSliderUI(yElements, minVal, maxVal, 0, 180);
                 // Send limit commands
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'min', value: minVal });
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'max', value: maxVal });
@@ -853,7 +881,71 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
         // Initial UI setup for Y from its default HTML values
-        updateDualRangeSliderUI(yElements, parseInt(servoYMinRangeEl.value), parseInt(servoYMaxRangeEl.value), 'Y');
+        updateDualRangeSliderUI(yElements, parseInt(servoYMinRangeEl.value), parseInt(servoYMaxRangeEl.value), 0, 180);
+    }
+
+    // Setup Velocity Dual Range Slider
+    if (velMinRangeEl && velMaxRangeEl && velMinValueEl && velMaxValueEl && velRangeSelectedEl) {
+        const velElements = {
+            minRangeEl: velMinRangeEl, maxRangeEl: velMaxRangeEl,
+            rangeSelectedEl: velRangeSelectedEl,
+            minValueEl: velMinValueEl, maxValueEl: velMaxValueEl
+        };
+        const VEL_OVERALL_MIN = 0;
+        const VEL_OVERALL_MAX = 3000;
+
+        [velMinRangeEl, velMaxRangeEl].forEach(input => {
+            input.addEventListener('input', (e) => {
+                let minVal = parseInt(velMinRangeEl.value);
+                let maxVal = parseInt(velMaxRangeEl.value);
+
+                if (maxVal - minVal < RANGE_MIN_DIFFERENCE) { // Using global RANGE_MIN_DIFFERENCE, consider if Vel needs its own
+                    if (e.target.id === velMinRangeEl.id) {
+                        minVal = maxVal - RANGE_MIN_DIFFERENCE;
+                        velMinRangeEl.value = minVal;
+                    } else {
+                        maxVal = minVal + RANGE_MIN_DIFFERENCE;
+                        velMaxRangeEl.value = maxVal;
+                    }
+                }
+                updateDualRangeSliderUI(velElements, minVal, maxVal, VEL_OVERALL_MIN, VEL_OVERALL_MAX);
+            });
+
+            input.addEventListener('change', (e) => {
+                const minVal = parseInt(velMinRangeEl.value);
+                const maxVal = parseInt(velMaxRangeEl.value);
+                sendCommand({ command: 'setPreference', key: 'minVel', value: minVal });
+                sendCommand({ command: 'setPreference', key: 'maxVel', value: maxVal });
+                // No direct servo movement for velocity changes
+            });
+        });
+
+        [velMinValueEl, velMaxValueEl].forEach(input => {
+            input.addEventListener('change', (e) => {
+                let minVal = parseInt(velMinValueEl.value);
+                let maxVal = parseInt(velMaxValueEl.value);
+
+                if (isNaN(minVal) || isNaN(maxVal)) return;
+                minVal = Math.max(VEL_OVERALL_MIN, Math.min(minVal, VEL_OVERALL_MAX - RANGE_MIN_DIFFERENCE));
+                maxVal = Math.min(VEL_OVERALL_MAX, Math.max(maxVal, VEL_OVERALL_MIN + RANGE_MIN_DIFFERENCE));
+
+                if (maxVal - minVal < RANGE_MIN_DIFFERENCE) {
+                    if (e.target.id === velMinValueEl.id) {
+                        minVal = maxVal - RANGE_MIN_DIFFERENCE;
+                    } else {
+                        maxVal = minVal + RANGE_MIN_DIFFERENCE;
+                    }
+                    minVal = Math.max(VEL_OVERALL_MIN, Math.min(minVal, VEL_OVERALL_MAX - RANGE_MIN_DIFFERENCE));
+                    maxVal = Math.min(VEL_OVERALL_MAX, Math.max(maxVal, VEL_OVERALL_MIN + RANGE_MIN_DIFFERENCE));
+                }
+
+                updateDualRangeSliderUI(velElements, minVal, maxVal, VEL_OVERALL_MIN, VEL_OVERALL_MAX);
+                sendCommand({ command: 'setPreference', key: 'minVel', value: minVal });
+                sendCommand({ command: 'setPreference', key: 'maxVel', value: maxVal });
+            });
+        });
+        // Initial UI setup for Velocity from its default HTML values
+        updateDualRangeSliderUI(velElements, parseInt(velMinRangeEl.value), parseInt(velMaxRangeEl.value), VEL_OVERALL_MIN, VEL_OVERALL_MAX);
     }
 
 
@@ -895,8 +987,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Setup collapsible sections
-    setupCollapsibleSection(toggleServoConfigBtn, servoConfigContent, 'servoConfigState');
+    setupCollapsibleSection(toggleDeviceConfigBtn, deviceConfigContent, 'deviceConfigState'); // Updated IDs and key
     setupCollapsibleSection(toggleDeviceStatusBtn, deviceStatusContent, 'deviceStatusState');
+
+
+    function populateTimezoneSelector() {
+        if (!timezoneSelectEl) return;
+        const timezones = [
+            { name: "UTC (GMT)", value: "Etc/UTC" },
+            { name: "London (GMT/BST)", value: "Europe/London" },
+            { name: "Berlin (CET/CEST)", value: "Europe/Berlin" },
+            { name: "New York (EST/EDT)", value: "America/New_York" },
+            { name: "Chicago (CST/CDT)", value: "America/Chicago" },
+            { name: "Denver (MST/MDT)", value: "America/Denver" },
+            { name: "Los Angeles (PST/PDT)", value: "America/Los_Angeles" },
+            { name: "Tokyo (JST)", value: "Asia/Tokyo" },
+            { name: "Sydney (AEST/AEDT)", value: "Australia/Sydney" },
+            // Add more common timezones as needed
+        ];
+        timezoneSelectEl.innerHTML = ''; // Clear loading/existing options
+        timezones.forEach(tz => {
+            const option = document.createElement('option');
+            option.value = tz.value;
+            option.textContent = tz.name;
+            timezoneSelectEl.appendChild(option);
+        });
+    }
+
+    function populateNtpIntervalSelector() {
+        if (!ntpIntervalSelectEl) return;
+        const intervals = [
+            { name: "1 Hour", value: 3600 },
+            { name: "3 Hours", value: 10800 },
+            { name: "6 Hours", value: 21600 },
+            { name: "12 Hours", value: 43200 },
+            { name: "24 Hours", value: 86400 },
+        ];
+        ntpIntervalSelectEl.innerHTML = ''; // Clear loading/existing options
+        intervals.forEach(interval => {
+            const option = document.createElement('option');
+            option.value = interval.value;
+            option.textContent = interval.name;
+            ntpIntervalSelectEl.appendChild(option);
+        });
+    }
+
+    populateTimezoneSelector();
+    populateNtpIntervalSelector();
+
+    if(timezoneSelectEl) {
+        timezoneSelectEl.addEventListener('change', () => {
+            if (!selectedDeviceId) {
+                alert('Please select a device first.');
+                timezoneSelectEl.value = deviceStates[selectedDeviceId]?.timezoneName || 'Etc/UTC'; // Revert to old or default
+                return;
+            }
+            sendCommand({ command: 'setPreference', key: 'timezoneName', value: timezoneSelectEl.value });
+        });
+    }
+
+    if(ntpIntervalSelectEl) {
+        ntpIntervalSelectEl.addEventListener('change', () => {
+            if (!selectedDeviceId) {
+                alert('Please select a device first.');
+                ntpIntervalSelectEl.value = deviceStates[selectedDeviceId]?.ntpUpdateInterval || '3600'; // Revert to old or default
+                return;
+            }
+            sendCommand({ command: 'setPreference', key: 'ntpUpdateInterval', value: parseInt(ntpIntervalSelectEl.value) });
+        });
+    }
 
     connectWebSocket(); // Start WebSocket connection on page load
 });
