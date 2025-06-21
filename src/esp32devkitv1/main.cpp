@@ -356,18 +356,29 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                             else if (strcmp(key, "timezone_posix") == 0) {
                                 timeZonePosixString = doc["value"].as<String>();
                                 preferences.putString("tz_posix", timeZonePosixString);
-                                configTime(0, 0, "pool.ntp.org", timeZonePosixString.c_str()); // Re-apply time config
-                                Serial.printf("setPreference(timezone_posix): configTime re-called with POSIX: %s\n", timeZonePosixString.c_str()); // Logging added
+
+                                // Set the Timezone environment variable
+                                Serial.printf("[WSc] Setting TZ environment variable to: %s\n", timeZonePosixString.c_str());
+                                setenv("TZ", timeZonePosixString.c_str(), 1);
+                                tzset(); // Apply the TZ setting
+
+                                // Re-configure system time with NTP server. Offsets are 0 as TZ env var handles it.
+                                // configTime(0, 0, "pool.ntp.org"); // Not strictly necessary to call this again if NTP servers haven't changed
+                                                                    // and if sntp is already running. tzset() is the key.
+                                Serial.printf("[WSc] System TZ updated. Current NTP server 'pool.ntp.org'. TZ set by environment: %s\n", timeZonePosixString.c_str());
+
                                 timeClient.setTimeOffset(0); // Ensure NTPClient knows its offset is 0 relative to system time
-                                if (timeClient.update()) { // Attempt to update time immediately
+
+                                Serial.println("[WSc] Attempting to update NTP time immediately after timezone change...");
+                                if (timeClient.update()) {
                                    Serial.println("[WSc] NTP time updated successfully after timezone change.");
                                 } else {
-                                   Serial.println("[WSc] NTP time update failed after timezone change.");
+                                   Serial.println("[WSc] NTP time update failed after timezone change. Will retry on next interval.");
                                 }
-                                lastNTPUpdateTime = millis(); // Reset NTP update timer
+                                lastNTPUpdateTime = millis(); // Reset NTP update timer to force update sooner if configured interval is long
                                 preferenceChanged = true;
-                                Serial.printf("[WSc] Timezone POSIX string updated to: %s\n", timeZonePosixString.c_str());
-                                updateDisplay(); // Force OLED update
+                                Serial.printf("[WSc] Timezone POSIX string updated to: %s and applied.\n", timeZonePosixString.c_str());
+                                updateDisplay(); // Force OLED update to reflect new time immediately
                             }
                             else if (strcmp(key, "ntp_interval") == 0) {
                                 ntpUpdateInterval = doc["value"].as<long>(); // Value is in ms from web UI
@@ -687,21 +698,21 @@ showBongoCat();
     Serial.println(staSSID);
     Serial.println(staPassword);
 
-    // Configure time using POSIX string for proper DST handling
-    // The first two arguments (GMToffset and DSToffset) are 0 when a POSIX string is used,
-    // as the POSIX string itself defines these.
-    configTime(0, 0, "pool.ntp.org", timeZonePosixString.c_str());
-    Serial.printf("Time configured with POSIX string: %s\n", timeZonePosixString.c_str());
+    // Set the Timezone environment variable
+    Serial.printf("Setting TZ environment variable to: %s\n", timeZonePosixString.c_str());
+    setenv("TZ", timeZonePosixString.c_str(), 1);
+    tzset(); // Apply the TZ setting
 
-    // Initialize NTP Client - after configTime, setTimeOffset for NTPClient should be 0
-    // as POSIX string handles the actual offset and DST.
+    // Configure time: first two args are 0,0 because TZ env var will handle offsets/DST
+    // Then specify NTP servers.
+    configTime(0, 0, "pool.ntp.org");
+    Serial.printf("System time configured with NTP server 'pool.ntp.org'. TZ set by environment: %s\n", timeZonePosixString.c_str());
+
+    // Initialize NTP Client
+    // timeClient.setTimeOffset should be 0 because localtime_r will use the TZ environment variable.
     timeClient.begin();
-    timeClient.setTimeOffset(0); // POSIX string handles the actual offset
-    // timeClient.setDayLight(false); // Not strictly needed as POSIX string handles DST rules.
-                                   // Some versions of NTPClient might not have setDayLight.
-                                   // If it causes issues or is unavailable, it can be omitted.
-    Serial.println("NTP Client started (after POSIX configTime).");
-    Serial.printf("setup: configTime called with POSIX: %s\n", timeZonePosixString.c_str()); // Logging added
+    timeClient.setTimeOffset(0);
+    Serial.println("NTP Client started. Time offset 0, using system TZ.");
 
     // Immediately try to get the time at startup
     if (!timeClient.update()) {
