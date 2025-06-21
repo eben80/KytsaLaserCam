@@ -230,23 +230,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Update Y position slider value - REMOVED as slider is gone
 
                         // Update Velocity limits from systemConfig
-                        if (message.config.minVel !== undefined && message.config.maxVel !== undefined && velMinRangeEl) { // Check velMinRangeEl as a proxy for all vel elements
+                        if (message.config.min_vel !== undefined && message.config.max_vel !== undefined && velMinRangeEl) { // Use snake_case
                             const velElements = {
                                 minRangeEl: velMinRangeEl, maxRangeEl: velMaxRangeEl,
                                 rangeSelectedEl: velRangeSelectedEl,
                                 minValueEl: velMinValueEl, maxValueEl: velMaxValueEl
                             };
-                            updateDualRangeSliderUI(velElements, parseInt(message.config.minVel), parseInt(message.config.maxVel), 0, 3000);
+                            updateDualRangeSliderUI(velElements, parseInt(message.config.min_vel), parseInt(message.config.max_vel), 0, 3000);
                         }
 
                         // Update Timezone from systemConfig
-                        if (message.config.timezoneName !== undefined && timezoneSelectEl) {
-                            timezoneSelectEl.value = message.config.timezoneName;
+                        if (message.config.timezone !== undefined && timezoneSelectEl) { // Expect 'timezone' (integer hours)
+                            timezoneSelectEl.value = message.config.timezone;
                         }
 
                         // Update NTP Interval from systemConfig
-                        if (message.config.ntpUpdateInterval !== undefined && ntpIntervalSelectEl) {
-                            ntpIntervalSelectEl.value = message.config.ntpUpdateInterval;
+                        if (message.config.ntp_interval !== undefined && ntpIntervalSelectEl) { // Expect 'ntp_interval' (milliseconds)
+                            ntpIntervalSelectEl.value = message.config.ntp_interval / 1000; // Convert ms to seconds for select value
                         }
 
                         // Update CAM button states if present in systemConfig.config
@@ -914,8 +914,8 @@ document.addEventListener('DOMContentLoaded', () => {
             input.addEventListener('change', (e) => {
                 const minVal = parseInt(velMinRangeEl.value);
                 const maxVal = parseInt(velMaxRangeEl.value);
-                sendCommand({ command: 'setPreference', key: 'minVel', value: minVal });
-                sendCommand({ command: 'setPreference', key: 'maxVel', value: maxVal });
+                sendCommand({ command: 'setPreference', key: 'min_vel', value: minVal }); // Use snake_case
+                sendCommand({ command: 'setPreference', key: 'max_vel', value: maxVal }); // Use snake_case
                 // No direct servo movement for velocity changes
             });
         });
@@ -940,8 +940,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 updateDualRangeSliderUI(velElements, minVal, maxVal, VEL_OVERALL_MIN, VEL_OVERALL_MAX);
-                sendCommand({ command: 'setPreference', key: 'minVel', value: minVal });
-                sendCommand({ command: 'setPreference', key: 'maxVel', value: maxVal });
+                sendCommand({ command: 'setPreference', key: 'min_vel', value: minVal }); // Use snake_case
+                sendCommand({ command: 'setPreference', key: 'max_vel', value: maxVal }); // Use snake_case
             });
         });
         // Initial UI setup for Velocity from its default HTML values
@@ -994,21 +994,38 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateTimezoneSelector() {
         if (!timezoneSelectEl) return;
         const timezones = [
-            { name: "UTC (GMT)", value: "Etc/UTC" },
-            { name: "London (GMT/BST)", value: "Europe/London" },
-            { name: "Berlin (CET/CEST)", value: "Europe/Berlin" },
-            { name: "New York (EST/EDT)", value: "America/New_York" },
-            { name: "Chicago (CST/CDT)", value: "America/Chicago" },
-            { name: "Denver (MST/MDT)", value: "America/Denver" },
-            { name: "Los Angeles (PST/PDT)", value: "America/Los_Angeles" },
-            { name: "Tokyo (JST)", value: "Asia/Tokyo" },
-            { name: "Sydney (AEST/AEDT)", value: "Australia/Sydney" },
-            // Add more common timezones as needed
+            { name: "UTC-12", value: -12 },
+            { name: "UTC-11", value: -11 },
+            { name: "UTC-10 (Hawaii)", value: -10 },
+            { name: "UTC-9 (Alaska)", value: -9 },
+            { name: "UTC-8 (PST)", value: -8 },
+            { name: "UTC-7 (MST)", value: -7 },
+            { name: "UTC-6 (CST)", value: -6 },
+            { name: "UTC-5 (EST)", value: -5 },
+            { name: "UTC-4 (Atlantic)", value: -4 },
+            { name: "UTC-3", value: -3 },
+            { name: "UTC-2", value: -2 },
+            { name: "UTC-1", value: -1 },
+            { name: "UTC+0 (GMT/London)", value: 0 },
+            { name: "UTC+1 (CET/Berlin)", value: 1 },
+            { name: "UTC+2 (EET/Kyiv - ESP32 Default)", value: 2 },
+            { name: "UTC+3 (Moscow)", value: 3 },
+            { name: "UTC+4", value: 4 },
+            { name: "UTC+5", value: 5 },
+            { name: "UTC+6", value: 6 },
+            { name: "UTC+7", value: 7 },
+            { name: "UTC+8 (Perth/Beijing)", value: 8 },
+            { name: "UTC+9 (Tokyo)", value: 9 },
+            { name: "UTC+10 (Sydney AEST)", value: 10 },
+            { name: "UTC+11", value: 11 },
+            { name: "UTC+12", value: 12 },
+            { name: "UTC+13", value: 13 },
+            { name: "UTC+14", value: 14 },
         ];
         timezoneSelectEl.innerHTML = ''; // Clear loading/existing options
         timezones.forEach(tz => {
             const option = document.createElement('option');
-            option.value = tz.value;
+            option.value = tz.value; // Integer hour offset
             option.textContent = tz.name;
             timezoneSelectEl.appendChild(option);
         });
@@ -1039,10 +1056,17 @@ document.addEventListener('DOMContentLoaded', () => {
         timezoneSelectEl.addEventListener('change', () => {
             if (!selectedDeviceId) {
                 alert('Please select a device first.');
-                timezoneSelectEl.value = deviceStates[selectedDeviceId]?.timezoneName || 'Etc/UTC'; // Revert to old or default
+                // Attempt to revert to last known state for this device, or a common default like '0' (UTC)
+                const lastKnownState = deviceStates[selectedDeviceId];
+                if (lastKnownState && lastKnownState.timezone !== undefined) {
+                    timezoneSelectEl.value = lastKnownState.timezone;
+                } else {
+                    timezoneSelectEl.value = '0'; // Default to UTC if no state known
+                }
                 return;
             }
-            sendCommand({ command: 'setPreference', key: 'timezoneName', value: timezoneSelectEl.value });
+            // ESP32 expects preference key "timezone" and an integer value (hours)
+            sendCommand({ command: 'setPreference', key: 'timezone', value: parseInt(timezoneSelectEl.value) });
         });
     }
 
@@ -1050,10 +1074,17 @@ document.addEventListener('DOMContentLoaded', () => {
         ntpIntervalSelectEl.addEventListener('change', () => {
             if (!selectedDeviceId) {
                 alert('Please select a device first.');
-                ntpIntervalSelectEl.value = deviceStates[selectedDeviceId]?.ntpUpdateInterval || '3600'; // Revert to old or default
+                const lastKnownState = deviceStates[selectedDeviceId];
+                if (lastKnownState && lastKnownState.ntp_interval !== undefined) {
+                    ntpIntervalSelectEl.value = lastKnownState.ntp_interval / 1000; // Convert ms to s for select value
+                } else {
+                    ntpIntervalSelectEl.value = '3600'; // Default to 1 hour (3600s)
+                }
                 return;
             }
-            sendCommand({ command: 'setPreference', key: 'ntpUpdateInterval', value: parseInt(ntpIntervalSelectEl.value) });
+            // ESP32 expects preference key "ntp_interval" and value in milliseconds
+            const valueInSeconds = parseInt(ntpIntervalSelectEl.value);
+            sendCommand({ command: 'setPreference', key: 'ntp_interval', value: valueInSeconds * 1000 });
         });
     }
 
