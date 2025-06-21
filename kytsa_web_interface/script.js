@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 rangeSelectedEl: servoYRangeSelectedEl,
                                 minValueEl: servoYMinValueEl, maxValueEl: servoYMaxValueEl
                             };
-                            updateDualRangeSliderUI(yElements, parseInt(message.config.min_y), parseInt(message.config.max_y), 0, 180);
+                            updateDualRangeSliderUI(yElements, parseInt(message.config.min_y), parseInt(message.config.max_y), 45, 135); // Y-axis specific range
                         }
                         // Update Y position slider value - REMOVED as slider is gone
 
@@ -871,9 +871,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         servoYMaxRangeEl.value = maxVal;
                     }
                 }
-                // For Y, let's ensure the values stay broadly within a 0-180 context for the slider mechanism,
-                // but the actual effective limits (like 45-135) will be from initial values or systemConfig.
-                updateDualRangeSliderUI(yElements, minVal, maxVal, 0, 180);
+                // For Y, use the specific 45-135 range for UI updates.
+                updateDualRangeSliderUI(yElements, minVal, maxVal, 45, 135);
                 turnLaserOnWithTimeout(); // Call laser function on input
             });
 
@@ -899,8 +898,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 let maxVal = parseInt(servoYMaxValueEl.value);
 
                 if (isNaN(minVal) || isNaN(maxVal)) return;
-                minVal = Math.max(0, Math.min(minVal, 180 - RANGE_MIN_DIFFERENCE));
-                maxVal = Math.min(180, Math.max(maxVal, 0 + RANGE_MIN_DIFFERENCE));
+                // Clamp to the Y-axis specific range 45-135
+                minVal = Math.max(45, Math.min(minVal, 135 - RANGE_MIN_DIFFERENCE));
+                maxVal = Math.min(135, Math.max(maxVal, 45 + RANGE_MIN_DIFFERENCE));
 
                 if (maxVal - minVal < RANGE_MIN_DIFFERENCE) {
                     if (e.target.id === servoYMinValueEl.id) {
@@ -908,11 +908,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         maxVal = minVal + RANGE_MIN_DIFFERENCE;
                     }
-                    minVal = Math.max(0, Math.min(minVal, 180 - RANGE_MIN_DIFFERENCE));
-                    maxVal = Math.min(180, Math.max(maxVal, 0 + RANGE_MIN_DIFFERENCE));
+                    // Re-clamp after adjustment
+                    minVal = Math.max(45, Math.min(minVal, 135 - RANGE_MIN_DIFFERENCE));
+                    maxVal = Math.min(135, Math.max(maxVal, 45 + RANGE_MIN_DIFFERENCE));
                 }
 
-                updateDualRangeSliderUI(yElements, minVal, maxVal, 0, 180);
+                updateDualRangeSliderUI(yElements, minVal, maxVal, 45, 135); // Y-axis specific range
                 // Send limit commands
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'min', value: minVal });
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'max', value: maxVal });
