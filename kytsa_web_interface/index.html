@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Web Control</title>
+    <title>Kytsa Laser Control</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>ESP32 Remote Control</h1>
+    <h1>Kytsa Laser Control</h1>
 
     <div>
         <label for="deviceSelect">Select Device:</label>
@@ -26,13 +26,13 @@
             </div>
 
             <div class="control-group">
-                <h3>ESP32 CAM</h3>
+                <h3>Live Streaming</h3>
                 <button id="toggleCamStreamBtn" disabled>Toggle CAM Stream</button><br>
                 <button id="toggleCamLedBtn" disabled>Toggle CAM LED</button><br>
             </div>
 
             <div class="timer-controls control-group"> <!-- Assuming timer-controls can also be a control-group or styled similarly -->
-                <h3>Timer Configuration</h3> <!-- Changed from H2 to H3 for consistency -->
+                <h3>Kytsa Workouts</h3> <!-- Changed from H2 to H3 for consistency -->
                 <label for="timerStartTime">Start Time:</label>
                 <input type="time" id="timerStartTime" disabled><br>
                 <label for="timerEndTime">End Time:</label>
@@ -45,9 +45,9 @@
             </div>
 
             <div class="control-group">
-                <h3><button id="toggleDeviceConfigBtn" class="toggle-btn">+/-</button> Device Configuration</h3>
+                <h3><button id="toggleDeviceConfigBtn" class="toggle-btn">+/-</button> Configure Gym</h3>
                 <div id="deviceConfigContent" style="display: none;">
-                    <h4>X-Axis Limits</h4>
+                    <h4>Left-Right Limits</h4>
                     <div class="range-slider-container">
                         <div class="range-slider">
                             <span class="range-selected" id="servoXRangeSelected"></span>
@@ -67,7 +67,7 @@
 
                     <hr> <!-- Separator -->
 
-                    <h4>Y-Axis Limits</h4>
+                    <h4>Up-Down Limits</h4>
                     <div class="range-slider-container">
                         <div class="range-slider">
                             <span class="range-selected" id="servoYRangeSelected"></span>
@@ -87,7 +87,7 @@
 
                     <hr> <!-- Separator -->
 
-                    <h4>Velocity Limits (0-3000)</h4>
+                    <h4>How Fast (0-3000)</h4>
                     <div class="range-slider-container">
                         <div class="range-slider">
                             <span class="range-selected" id="velRangeSelected"></span>
