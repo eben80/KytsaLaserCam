@@ -187,6 +187,8 @@ void turnLaserOff();
 void sendSystemConfig(); // Forward declaration for our new function
 void addTimeSlot(String startTimeStr, String stopTimeStr); // Ensure it's declared if not already before webSocketEvent
 void deleteTimeSlot(int indexToDelete); // Ensure it's declared
+void updateDisplay(); // Forward declaration for OLED update
+
 
 /**
  * @brief Handles events from the WebSocket client.
