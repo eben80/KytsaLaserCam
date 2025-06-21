@@ -699,7 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // Setup X-Axis Dual Range Slider
-    if (servoXMinRangeEl && servoXMaxRangeEl && servoXMinValueEl && servoXMaxValueEl && servoXRangeSelectedEl && servoXSliderEl && servoXValueEl) {
+    if (servoXMinRangeEl && servoXMaxRangeEl && servoXMinValueEl && servoXMaxValueEl && servoXRangeSelectedEl) { // servoXSliderEl and servoXValueEl removed
         const xElements = {
             minRangeEl: servoXMinRangeEl, maxRangeEl: servoXMaxRangeEl,
             rangeSelectedEl: servoXRangeSelectedEl,
