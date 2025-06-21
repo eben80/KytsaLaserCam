@@ -349,16 +349,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                             else if (strcmp(key, "max_y") == 0) { maxY = doc["value"].as<int>(); preferences.putInt("max_y", maxY); preferenceChanged = true; }
                             else if (strcmp(key, "min_vel") == 0) { minVel = doc["value"].as<int>(); preferences.putInt("min_vel", minVel); preferenceChanged = true; }
                             else if (strcmp(key, "max_vel") == 0) { maxVel = doc["value"].as<int>(); preferences.putInt("max_vel", maxVel); preferenceChanged = true; }
-                            else if (strcmp(key, "timezone") == 0) {
-                                timeZoneOffset = doc["value"].as<int>();
-                                // timeZoneOffset = doc["value"].as<int>(); // Old integer offset logic removed
-                                // preferences.putInt("timezone", timeZoneOffset);
-                                // timeClient.setTimeOffset(timeZoneOffset * 3600);
-                                // timeClient.update();
-                                // lastNTPUpdateTime = millis();
-                                // preferenceChanged = true;
-                                Serial.println("[WSc] 'timezone' (integer offset) key is deprecated. Use 'timezone_posix'.");
-                            }
+                            // Removed obsolete 'timezone' (integer offset) case
                             else if (strcmp(key, "timezone_posix") == 0) {
                                 timeZonePosixString = doc["value"].as<String>();
                                 preferences.putString("tz_posix", timeZonePosixString);
