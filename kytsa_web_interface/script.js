@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 rangeSelectedEl: servoXRangeSelectedEl,
                                 minValueEl: servoXMinValueEl, maxValueEl: servoXMaxValueEl
                             };
-                            updateDualRangeSliderUI(xElements, parseInt(message.config.minX), parseInt(message.config.maxX), 'X');
+                            updateDualRangeSliderUI(xElements, parseInt(message.config.minX), parseInt(message.config.maxX), 0, 180); // Corrected: Pass 0, 180
                         }
                         // Update X position slider value - REMOVED as slider is gone
                         // if (servoXSliderEl && servoXValueEl && message.config.servoX_pos !== undefined) {
@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 rangeSelectedEl: servoYRangeSelectedEl,
                                 minValueEl: servoYMinValueEl, maxValueEl: servoYMaxValueEl
                             };
-                            updateDualRangeSliderUI(yElements, parseInt(message.config.minY), parseInt(message.config.maxY), 'Y');
+                            updateDualRangeSliderUI(yElements, parseInt(message.config.minY), parseInt(message.config.maxY), 0, 180); // Corrected: Pass 0, 180
                         }
                         // Update Y position slider value - REMOVED as slider is gone
 
@@ -708,8 +708,8 @@ document.addEventListener('DOMContentLoaded', () => {
                  newMax = newMin + RANGE_MIN_DIFFERENCE;
             }
             // Re-clamp after adjustment
-            newMin = Math.max(overallMin, Math.min(newMin, overallMax - RANGE_MIN_DIFFERENCE));
-            newMax = Math.min(overallMax, Math.max(newMax, newMin + RANGE_MIN_DIFFERENCE)); // Ensure max is at least min + diff
+            newMin = Math.max(overallSliderMin, Math.min(newMin, overallSliderMax - RANGE_MIN_DIFFERENCE));
+            newMax = Math.min(overallSliderMax, Math.max(newMax, newMin + RANGE_MIN_DIFFERENCE)); // Ensure max is at least min + diff
         }
 
         elements.minRangeEl.value = newMin;
@@ -717,8 +717,8 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.maxRangeEl.value = newMax;
         elements.maxValueEl.value = newMax;
 
-        const minPercent = (newMin / overallMax) * 100;
-        const maxPercent = (newMax / overallMax) * 100;
+        const minPercent = (newMin / overallSliderMax) * 100; // Use overallSliderMax
+        const maxPercent = (newMax / overallSliderMax) * 100; // Use overallSliderMax
         elements.rangeSelectedEl.style.left = `${minPercent}%`;
         elements.rangeSelectedEl.style.right = `${100 - maxPercent}%`;
 
