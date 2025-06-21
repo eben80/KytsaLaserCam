@@ -354,10 +354,16 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                                 timeZonePosixString = doc["value"].as<String>();
                                 preferences.putString("tz_posix", timeZonePosixString);
                                 configTime(0, 0, "pool.ntp.org", timeZonePosixString.c_str()); // Re-apply time config
-                                timeClient.update(); // Attempt to update time immediately
+                                timeClient.setTimeOffset(0); // Ensure NTPClient knows its offset is 0 relative to system time
+                                if (timeClient.update()) { // Attempt to update time immediately
+                                   Serial.println("[WSc] NTP time updated successfully after timezone change.");
+                                } else {
+                                   Serial.println("[WSc] NTP time update failed after timezone change.");
+                                }
                                 lastNTPUpdateTime = millis(); // Reset NTP update timer
                                 preferenceChanged = true;
                                 Serial.printf("[WSc] Timezone POSIX string updated to: %s\n", timeZonePosixString.c_str());
+                                updateDisplay(); // Force OLED update
                             }
                             else if (strcmp(key, "ntp_interval") == 0) {
                                 ntpUpdateInterval = doc["value"].as<long>(); // Value is in ms from web UI
