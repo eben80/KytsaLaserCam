@@ -17,6 +17,7 @@
 #include <NTPClient.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
+#include <time.h> // For time_t, tm, time(), localtime_r(), strftime()
 
 
 Preferences preferences;
@@ -948,7 +949,16 @@ void updateDisplay() {
     display.print("IP: ");
     display.println(WiFi.localIP());
     display.print("Time: ");
-    display.println(timeClient.getFormattedTime());
+    // display.println(timeClient.getFormattedTime()); // Old way
+
+    time_t now;
+    struct tm timeinfo;
+    time(&now); // Get current epoch time
+    localtime_r(&now, &timeinfo); // Convert to local time struct using system TZ (POSIX)
+    char buffer[12]; // Buffer for HH:MM:SS + null
+    strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
+    display.println(buffer);
+
     display.setCursor(0, 16); // Move to the second half of the screen
 
     if (isScheduledMovementActive) {
