@@ -609,10 +609,7 @@ showBongoCat();
   tzset(); // Apply the TZ setting
   Serial.println("System TZ applied from preferences.");
 
-  // Initialize NTP Client immediately after setting TZ, so it uses correct offset logic from start
-  timeClient.begin();
-  timeClient.setTimeOffset(0); // Offset is 0 because TZ env var + localtime_r handle localization
-  Serial.println("NTP Client initialized after TZ setting.");
+  // NTP Client will be initialized after WiFi connects.
 
   // Load num_timers first to know how many slots were previously saved.
   // This value might be adjusted later if some slots are found to be invalid.
@@ -714,8 +711,14 @@ showBongoCat();
     configTime(0, 0, "pool.ntp.org");
     Serial.printf("System time configured with NTP server 'pool.ntp.org'. TZ set by environment: %s\n", timeZonePosixString.c_str());
 
-    // NTP Client (timeClient) has already been initialized (begin() and setTimeOffset(0))
-    // immediately after TZ was set from preferences.
+    // Reinforce TZ setting before NTP client starts, just in case.
+    Serial.println("Reinforcing tzset() before NTP client operations.");
+    tzset();
+
+    // Initialize NTP Client now that WiFi is connected and system time basics are set up.
+    timeClient.begin();
+    timeClient.setTimeOffset(0); // Offset is 0 because TZ env var + localtime_r handle localization
+    Serial.println("NTP Client started. Time offset 0, using system TZ.");
 
     // Immediately try to get the time at startup
     Serial.println("Attempting initial NTP time synchronization...");
@@ -723,9 +726,9 @@ showBongoCat();
       Serial.println("Failed to get NTP time at startup (will retry in loop).");
     } else {
       Serial.println("NTP time synchronized at startup.");
+      updateDisplay(); // Update display once IF NTP sync was successful in setup
     }
     lastNTPUpdateTime = millis(); // Initialize the last update time, regardless of initial sync success
-    // updateDisplay(); // Removed: First display update will be handled by loop()
   }
 
 
