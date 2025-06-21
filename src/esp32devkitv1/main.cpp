@@ -959,8 +959,8 @@ void updateDisplay() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
 
-  char *tz_env = getenv("TZ");
-  Serial.printf("updateDisplay: System TZ environment variable: %s\n", tz_env ? tz_env : "NULL");
+  // char *tz_env = getenv("TZ"); // Logging removed
+  // Serial.printf("updateDisplay: System TZ environment variable: %s\n", tz_env ? tz_env : "NULL"); // Logging removed
 
   if (WiFi.status() == WL_CONNECTED) {
     display.print("IP: ");
@@ -969,19 +969,19 @@ void updateDisplay() {
 
     time_t now;
     time(&now); // Get current epoch time
-    Serial.printf("updateDisplay: Raw epoch from time(): %lu\n", (unsigned long)now);
+    // Serial.printf("updateDisplay: Raw epoch from time(): %lu\n", (unsigned long)now); // Logging removed
 
     if (now < 1609459200L) { // Check if time is past Jan 1, 2021 UTC (example threshold)
         display.println("Time not set");
-        Serial.println("updateDisplay: Time appears not to be set by NTP yet.");
+        // Serial.println("updateDisplay: Time appears not to be set by NTP yet."); // Logging removed
     } else {
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
         // Log detailed timeinfo
-        Serial.printf("updateDisplay: timeinfo: year=%d, mon=%d, day=%d, hour=%d, min=%d, sec=%d, isdst=%d\n",
-                      timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
-                      timeinfo.tm_isdst);
+        // Serial.printf("updateDisplay: timeinfo: year=%d, mon=%d, day=%d, hour=%d, min=%d, sec=%d, isdst=%d\n", // Logging removed
+        //               timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, // Logging removed
+        //               timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, // Logging removed
+        //               timeinfo.tm_isdst); // Logging removed
                       // Removed tm_gmtoff and tm_zone as they are not standard
 
         char buffer[12]; // Buffer for HH:MM:SS + null
