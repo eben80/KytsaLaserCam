@@ -7,12 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const controlTargetDeviceEl = document.getElementById('control-target-device');
     const statusTargetDeviceEl = document.getElementById('status-target-device');
 
-    // Servo position sliders and value displays
-    const servoXSliderEl = document.getElementById('servoX'); // Position slider
-    const servoXValueEl = document.getElementById('servoXValue');
-    const servoYSliderEl = document.getElementById('servoY'); // Position slider
-    const servoYValueEl = document.getElementById('servoYValue');
-
     // X-Axis Dual Range Slider Elements
     const servoXMinRangeEl = document.getElementById('servoXMinRange');
     const servoXMaxRangeEl = document.getElementById('servoXMaxRange');
@@ -46,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const deviceStatusContent = document.getElementById('deviceStatusContent');
 
     const allControls = [
-        servoXSliderEl, servoYSliderEl, // Main position sliders
+        // servoXSliderEl, servoYSliderEl, // Main position sliders REMOVED
         servoXMinRangeEl, servoXMaxRangeEl, servoXMinValueEl, servoXMaxValueEl, // X-axis range controls
         servoYMinRangeEl, servoYMaxRangeEl, servoYMinValueEl, servoYMaxValueEl, // Y-axis range controls
         timerStartTimeEl, timerEndTimeEl, addTimerBtn,
@@ -192,40 +186,42 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Also, update the dual range sliders from systemConfig.
 
                         // Update X-Axis from systemConfig
+                        // The primary role here is to update the slider's *value* and display.
+                        // Also, update the dual range sliders from systemConfig.
+
+                        // Update X-Axis from systemConfig
                         if (message.config.minX !== undefined && message.config.maxX !== undefined) {
-                            const xElements = {
+                            const xElements = { // Definition updated: no positionSliderEl, positionValueEl
                                 minRangeEl: servoXMinRangeEl, maxRangeEl: servoXMaxRangeEl,
                                 rangeSelectedEl: servoXRangeSelectedEl,
-                                minValueEl: servoXMinValueEl, maxValueEl: servoXMaxValueEl,
-                                positionSliderEl: servoXSliderEl, positionValueEl: servoXValueEl
+                                minValueEl: servoXMinValueEl, maxValueEl: servoXMaxValueEl
                             };
                             updateDualRangeSliderUI(xElements, parseInt(message.config.minX), parseInt(message.config.maxX), 'X');
                         }
-                        // Update X position slider value
-                        if (servoXSliderEl && servoXValueEl && message.config.servoX_pos !== undefined) {
-                            servoXSliderEl.value = message.config.servoX_pos; // Value will be clamped by min/max set by updateDualRangeSliderUI
-                            servoXValueEl.textContent = servoXSliderEl.value; // Display the (potentially clamped) value
-                        } else if (servoXSliderEl && servoXValueEl) {
-                             servoXValueEl.textContent = servoXSliderEl.value; // Ensure display matches if no pos from config
-                        }
+                        // Update X position slider value - REMOVED as slider is gone
+                        // if (servoXSliderEl && servoXValueEl && message.config.servoX_pos !== undefined) {
+                        //     servoXSliderEl.value = message.config.servoX_pos;
+                        //     servoXValueEl.textContent = servoXSliderEl.value;
+                        // } else if (servoXSliderEl && servoXValueEl) {
+                        //      servoXValueEl.textContent = servoXSliderEl.value;
+                        // }
 
                         // Update Y-Axis from systemConfig
                         if (message.config.minY !== undefined && message.config.maxY !== undefined) {
-                            const yElements = {
+                            const yElements = { // Definition updated: no positionSliderEl, positionValueEl
                                 minRangeEl: servoYMinRangeEl, maxRangeEl: servoYMaxRangeEl,
                                 rangeSelectedEl: servoYRangeSelectedEl,
-                                minValueEl: servoYMinValueEl, maxValueEl: servoYMaxValueEl,
-                                positionSliderEl: servoYSliderEl, positionValueEl: servoYValueEl
+                                minValueEl: servoYMinValueEl, maxValueEl: servoYMaxValueEl
                             };
                             updateDualRangeSliderUI(yElements, parseInt(message.config.minY), parseInt(message.config.maxY), 'Y');
                         }
-                        // Update Y position slider value
-                        if (servoYSliderEl && servoYValueEl && message.config.servoY_pos !== undefined) {
-                            servoYSliderEl.value = message.config.servoY_pos; // Value will be clamped by min/max
-                            servoYValueEl.textContent = servoYSliderEl.value; // Display the (potentially clamped) value
-                        } else if (servoYSliderEl && servoYValueEl) {
-                            servoYValueEl.textContent = servoYSliderEl.value; // Ensure display matches
-                        }
+                        // Update Y position slider value - REMOVED as slider is gone
+                        // if (servoYSliderEl && servoYValueEl && message.config.servoY_pos !== undefined) {
+                        //     servoYSliderEl.value = message.config.servoY_pos;
+                        //     servoYValueEl.textContent = servoYSliderEl.value;
+                        // } else if (servoYSliderEl && servoYValueEl) {
+                        //     servoYValueEl.textContent = servoYSliderEl.value;
+                        // }
 
                         // Update CAM button states if present in systemConfig.config
                         // ESP32's sendSystemConfig currently does not include these.
@@ -444,14 +440,9 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function updateDeviceStatusDisplay(data = {}) { // Default to empty object
         if (deviceStatusEl) deviceStatusEl.textContent = JSON.stringify(data, null, 2);
-        if (servoXSliderEl && data.servoX_pos !== undefined) {
-            servoXSliderEl.value = data.servoX_pos;
-            if (servoXValueEl) servoXValueEl.textContent = data.servoX_pos;
-        }
-        if (servoYSliderEl && data.servoY_pos !== undefined) {
-            servoYSliderEl.value = data.servoY_pos;
-            if (servoYValueEl) servoYValueEl.textContent = data.servoY_pos;
-        }
+        // servoXSliderEl, servoXValueEl, servoYSliderEl, servoYValueEl related logic removed
+        // as these elements no longer exist for displaying current position directly.
+        // The raw status display will still show these values if they come from the backend.
     }
 
     /**
@@ -527,14 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (servoXSliderEl) {
-        servoXSliderEl.addEventListener('input', () => { if (servoXValueEl) servoXValueEl.textContent = servoXSliderEl.value; });
-        servoXSliderEl.addEventListener('change', () => sendCommand({ command: 'servoX', value: parseInt(servoXSliderEl.value) }));
-    }
-    if (servoYSliderEl) {
-        servoYSliderEl.addEventListener('input', () => { if (servoYValueEl) servoYValueEl.textContent = servoYSliderEl.value; });
-        servoYSliderEl.addEventListener('change', () => sendCommand({ command: 'servoY', value: parseInt(servoYSliderEl.value) }));
-    }
+    // Old servoXSliderEl and servoYSliderEl event listeners are removed as elements are gone.
 
     // Timer management
     if (addTimerBtn) {
@@ -670,33 +654,35 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {HTMLSpanElement} elements.rangeSelectedEl - Span for visual selection.
      * @param {HTMLInputElement} elements.minValueEl - Min number input.
      * @param {HTMLInputElement} elements.maxValueEl - Max number input.
-     * @param {HTMLInputElement} elements.positionSliderEl - Main position slider for the axis.
-     * @param {HTMLSpanElement} elements.positionValueEl - Span for position slider's value.
      * @param {number} newMin - The new minimum value for the range.
      * @param {number} newMax - The new maximum value for the range.
      * @param {string} axisPrefix - 'X' or 'Y' for overall slider limits (e.g., 0-180 for X).
      */
     function updateDualRangeSliderUI(elements, newMin, newMax, axisPrefix) {
-        const overallMin = (axisPrefix === 'X') ? 0 : 0; // Could be different if Y had hardcoded different overall limits
+        const overallMin = (axisPrefix === 'X') ? 0 : 0;
         const overallMax = (axisPrefix === 'X') ? 180 : 180;
 
         newMin = Math.max(overallMin, Math.min(newMin, overallMax - RANGE_MIN_DIFFERENCE));
         newMax = Math.min(overallMax, Math.max(newMax, overallMin + RANGE_MIN_DIFFERENCE));
-        if (newMax - newMin < RANGE_MIN_DIFFERENCE) {
-            // This can happen if inputs are typed quickly. Prioritize the min value or max.
-            // For simplicity, let's assume if newMin changed, we adjust newMax, else adjust newMin.
-            // This might need more robust handling based on which element triggered.
-            // For now, if newMin is the source of truth, adjust newMax.
-            if (elements.minRangeEl === document.activeElement || elements.minValueEl === document.activeElement) {
-                 newMax = newMin + RANGE_MIN_DIFFERENCE;
-            } else {
-                 newMin = newMax - RANGE_MIN_DIFFERENCE;
-            }
-             // Re-clamp
-            newMin = Math.max(overallMin, Math.min(newMin, overallMax - RANGE_MIN_DIFFERENCE));
-            newMax = Math.min(overallMax, Math.max(newMax, overallMin + RANGE_MIN_DIFFERENCE));
-        }
 
+        if (newMax - newMin < RANGE_MIN_DIFFERENCE) {
+            // This logic might need refinement based on which input triggered the call,
+            // but for now, it tries to maintain the difference.
+            // If called from min thumb/input, adjust max. If from max, adjust min.
+            // This simple check might not always be correct if called programmatically.
+            if (document.activeElement && (document.activeElement === elements.minRangeEl || document.activeElement === elements.minValueEl) ) {
+                 newMax = newMin + RANGE_MIN_DIFFERENCE;
+            } else if (document.activeElement && (document.activeElement === elements.maxRangeEl || document.activeElement === elements.maxValueEl)) {
+                 newMin = newMax - RANGE_MIN_DIFFERENCE;
+            } else {
+                // Default: if min changed more recently or is the one causing issue, adjust max
+                // This is a heuristic. A more robust way would be to know which value is "leading".
+                 newMax = newMin + RANGE_MIN_DIFFERENCE;
+            }
+            // Re-clamp after adjustment
+            newMin = Math.max(overallMin, Math.min(newMin, overallMax - RANGE_MIN_DIFFERENCE));
+            newMax = Math.min(overallMax, Math.max(newMax, newMin + RANGE_MIN_DIFFERENCE)); // Ensure max is at least min + diff
+        }
 
         elements.minRangeEl.value = newMin;
         elements.minValueEl.value = newMin;
@@ -708,20 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.rangeSelectedEl.style.left = `${minPercent}%`;
         elements.rangeSelectedEl.style.right = `${100 - maxPercent}%`;
 
-        // Update the main position slider's limits
-        elements.positionSliderEl.min = newMin;
-        elements.positionSliderEl.max = newMax;
-
-        // Clamp position slider's current value
-        let currentPosition = parseInt(elements.positionSliderEl.value);
-        if (currentPosition < newMin) {
-            elements.positionSliderEl.value = newMin;
-            currentPosition = newMin;
-        } else if (currentPosition > newMax) {
-            elements.positionSliderEl.value = newMax;
-            currentPosition = newMax;
-        }
-        if (elements.positionValueEl) elements.positionValueEl.textContent = currentPosition;
+        // Logic for updating positionSliderEl and positionValueEl has been removed.
     }
 
 
@@ -730,8 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const xElements = {
             minRangeEl: servoXMinRangeEl, maxRangeEl: servoXMaxRangeEl,
             rangeSelectedEl: servoXRangeSelectedEl,
-            minValueEl: servoXMinValueEl, maxValueEl: servoXMaxValueEl,
-            positionSliderEl: servoXSliderEl, positionValueEl: servoXValueEl
+            minValueEl: servoXMinValueEl, maxValueEl: servoXMaxValueEl
+            // positionSliderEl and positionValueEl removed
         };
 
         [servoXMinRangeEl, servoXMaxRangeEl].forEach(input => {
@@ -751,39 +724,52 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateDualRangeSliderUI(xElements, minVal, maxVal, 'X');
             });
 
-            input.addEventListener('change', () => {
+            input.addEventListener('change', (e) => {
                 const minVal = parseInt(servoXMinRangeEl.value);
                 const maxVal = parseInt(servoXMaxRangeEl.value);
+                // Send limit commands
                 sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'min', value: minVal });
                 sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'max', value: maxVal });
+
+                // Move servo to the thumb that was adjusted
+                if (e.target.id === servoXMinRangeEl.id) {
+                    sendCommand({ command: 'servoX', value: minVal });
+                } else if (e.target.id === servoXMaxRangeEl.id) {
+                    sendCommand({ command: 'servoX', value: maxVal });
+                }
             });
         });
 
         [servoXMinValueEl, servoXMaxValueEl].forEach(input => {
-            input.addEventListener('change', (e) => { // Using 'change' for number inputs to avoid rapid updates
+            input.addEventListener('change', (e) => {
                 let minVal = parseInt(servoXMinValueEl.value);
                 let maxVal = parseInt(servoXMaxValueEl.value);
 
-                // Basic validation before updating UI from number inputs
                 if (isNaN(minVal) || isNaN(maxVal)) return;
                 minVal = Math.max(0, Math.min(minVal, 180 - RANGE_MIN_DIFFERENCE));
                 maxVal = Math.min(180, Math.max(maxVal, 0 + RANGE_MIN_DIFFERENCE));
 
-
                 if (maxVal - minVal < RANGE_MIN_DIFFERENCE) {
-                    if (e.target.id === 'servoXMinValue') {
+                    if (e.target.id === servoXMinValueEl.id) {
                         minVal = maxVal - RANGE_MIN_DIFFERENCE;
                     } else {
                         maxVal = minVal + RANGE_MIN_DIFFERENCE;
                     }
-                     // Re-clamp after adjustment
                     minVal = Math.max(0, Math.min(minVal, 180 - RANGE_MIN_DIFFERENCE));
                     maxVal = Math.min(180, Math.max(maxVal, 0 + RANGE_MIN_DIFFERENCE));
                 }
 
                 updateDualRangeSliderUI(xElements, minVal, maxVal, 'X');
+                // Send limit commands
                 sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'min', value: minVal });
                 sendCommand({ command: 'setServoLimit', axis: 'x', limit_type: 'max', value: maxVal });
+
+                // Move servo to the value of the input that was changed
+                if (e.target.id === servoXMinValueEl.id) {
+                    sendCommand({ command: 'servoX', value: minVal });
+                } else if (e.target.id === servoXMaxValueEl.id) {
+                    sendCommand({ command: 'servoX', value: maxVal });
+                }
             });
         });
         // Initial UI setup for X from its default HTML values
@@ -791,12 +777,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Setup Y-Axis Dual Range Slider
-    if (servoYMinRangeEl && servoYMaxRangeEl && servoYMinValueEl && servoYMaxValueEl && servoYRangeSelectedEl && servoYSliderEl && servoYValueEl) {
+    if (servoYMinRangeEl && servoYMaxRangeEl && servoYMinValueEl && servoYMaxValueEl && servoYRangeSelectedEl) { // servoYSliderEl and servoYValueEl removed from condition
         const yElements = {
             minRangeEl: servoYMinRangeEl, maxRangeEl: servoYMaxRangeEl,
             rangeSelectedEl: servoYRangeSelectedEl,
-            minValueEl: servoYMinValueEl, maxValueEl: servoYMaxValueEl,
-            positionSliderEl: servoYSliderEl, positionValueEl: servoYValueEl
+            minValueEl: servoYMinValueEl, maxValueEl: servoYMaxValueEl
+            // positionSliderEl and positionValueEl removed
         };
 
         [servoYMinRangeEl, servoYMaxRangeEl].forEach(input => {
@@ -818,11 +804,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateDualRangeSliderUI(yElements, minVal, maxVal, 'Y');
             });
 
-            input.addEventListener('change', () => {
+            input.addEventListener('change', (e) => {
                 const minVal = parseInt(servoYMinRangeEl.value);
                 const maxVal = parseInt(servoYMaxRangeEl.value);
+                // Send limit commands
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'min', value: minVal });
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'max', value: maxVal });
+
+                // Move servo to the thumb that was adjusted
+                if (e.target.id === servoYMinRangeEl.id) {
+                    sendCommand({ command: 'servoY', value: minVal });
+                } else if (e.target.id === servoYMaxRangeEl.id) {
+                    sendCommand({ command: 'servoY', value: maxVal });
+                }
             });
         });
 
@@ -832,13 +826,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 let maxVal = parseInt(servoYMaxValueEl.value);
 
                 if (isNaN(minVal) || isNaN(maxVal)) return;
-                // Allow full 0-180 range in number inputs, but clamp to maintain difference
                 minVal = Math.max(0, Math.min(minVal, 180 - RANGE_MIN_DIFFERENCE));
                 maxVal = Math.min(180, Math.max(maxVal, 0 + RANGE_MIN_DIFFERENCE));
 
-
                 if (maxVal - minVal < RANGE_MIN_DIFFERENCE) {
-                    if (e.target.id === 'servoYMinValue') {
+                    if (e.target.id === servoYMinValueEl.id) {
                         minVal = maxVal - RANGE_MIN_DIFFERENCE;
                     } else {
                         maxVal = minVal + RANGE_MIN_DIFFERENCE;
@@ -848,8 +840,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 updateDualRangeSliderUI(yElements, minVal, maxVal, 'Y');
+                // Send limit commands
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'min', value: minVal });
                 sendCommand({ command: 'setServoLimit', axis: 'y', limit_type: 'max', value: maxVal });
+
+                // Move servo to the value of the input that was changed
+                if (e.target.id === servoYMinValueEl.id) {
+                    sendCommand({ command: 'servoY', value: minVal });
+                } else if (e.target.id === servoYMaxValueEl.id) {
+                    sendCommand({ command: 'servoY', value: maxVal });
+                }
             });
         });
         // Initial UI setup for Y from its default HTML values
