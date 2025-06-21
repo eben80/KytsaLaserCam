@@ -603,6 +603,12 @@ showBongoCat();
   Serial.print("Loaded Max Velocity (Preferences): ");
   Serial.println(maxVel);
 
+  // Immediately set the Timezone environment variable after loading from preferences
+  Serial.printf("Setting TZ environment variable from preferences: %s\n", timeZonePosixString.c_str());
+  setenv("TZ", timeZonePosixString.c_str(), 1);
+  tzset(); // Apply the TZ setting
+  Serial.println("System TZ applied from preferences.");
+
   // Load num_timers first to know how many slots were previously saved.
   // This value might be adjusted later if some slots are found to be invalid.
   numTimeSlots = preferences.getInt("num_timers", 0);
@@ -698,13 +704,8 @@ showBongoCat();
     Serial.println(staSSID);
     Serial.println(staPassword);
 
-    // Set the Timezone environment variable
-    Serial.printf("Setting TZ environment variable to: %s\n", timeZonePosixString.c_str());
-    setenv("TZ", timeZonePosixString.c_str(), 1);
-    tzset(); // Apply the TZ setting
-
-    // Configure time: first two args are 0,0 because TZ env var will handle offsets/DST
-    // Then specify NTP servers.
+    // Timezone (setenv/tzset) has already been set earlier from preferences.
+    // Now, configure system time with NTP server. Offsets are 0,0 because TZ env var handles it.
     configTime(0, 0, "pool.ntp.org");
     Serial.printf("System time configured with NTP server 'pool.ntp.org'. TZ set by environment: %s\n", timeZonePosixString.c_str());
 
