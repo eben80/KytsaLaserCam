@@ -47,14 +47,45 @@
             <div class="control-group">
                 <h3><button id="toggleServoConfigBtn" class="toggle-btn">+/-</button> Servo Configuration</h3>
                 <div id="servoConfigContent" style="display: none;">
-                    <label for="servoX">Servo X:</label>
-                    <input type="range" id="servoX" min="0" max="180" value="90" disabled> <span id="servoXValue">90</span><br>
-                    <button id="setXMinBtn" disabled>Set X Min</button>
-                    <button id="setXMaxBtn" disabled>Set X Max</button><br>
-                    <label for="servoY">Servo Y:</label>
-                    <input type="range" id="servoY" min="45" max="135" value="90" disabled> <span id="servoYValue">90</span><br>
-                    <button id="setYMinBtn" disabled>Set Y Min</button>
-                    <button id="setYMaxBtn" disabled>Set Y Max</button><br>
+                    <h4>X-Axis Limits</h4>
+                    <div class="range-slider-container">
+                        <div class="range-slider">
+                            <span class="range-selected" id="servoXRangeSelected"></span>
+                        </div>
+                        <div class="range-input">
+                            <input type="range" id="servoXMinRange" min="0" max="180" value="0" step="1" disabled>
+                            <input type="range" id="servoXMaxRange" min="0" max="180" value="180" step="1" disabled>
+                        </div>
+                        <div class="range-values">
+                            <label for="servoXMinValue">Min:</label>
+                            <input type="number" id="servoXMinValue" value="0" min="0" max="180" step="1" disabled>
+                            <label for="servoXMaxValue">Max:</label>
+                            <input type="number" id="servoXMaxValue" value="180" min="0" max="180" step="1" disabled>
+                        </div>
+                    </div>
+                    <label for="servoX">Servo X Position:</label>
+                    <input type="range" id="servoX" value="90" disabled> <span id="servoXValue">90</span><br>
+
+                    <hr> <!-- Separator -->
+
+                    <h4>Y-Axis Limits</h4>
+                    <div class="range-slider-container">
+                        <div class="range-slider">
+                            <span class="range-selected" id="servoYRangeSelected"></span>
+                        </div>
+                        <div class="range-input">
+                            <input type="range" id="servoYMinRange" min="0" max="180" value="45" step="1" disabled>
+                            <input type="range" id="servoYMaxRange" min="0" max="180" value="135" step="1" disabled>
+                        </div>
+                        <div class="range-values">
+                            <label for="servoYMinValue">Min:</label>
+                            <input type="number" id="servoYMinValue" value="45" min="0" max="180" step="1" disabled>
+                            <label for="servoYMaxValue">Max:</label>
+                            <input type="number" id="servoYMaxValue" value="135" min="0" max="180" step="1" disabled>
+                        </div>
+                    </div>
+                    <label for="servoY">Servo Y Position:</label>
+                    <input type="range" id="servoY" value="90" disabled> <span id="servoYValue">90</span><br>
                 </div>
             </div>
 

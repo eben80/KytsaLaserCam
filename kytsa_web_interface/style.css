@@ -16,3 +16,76 @@ button:disabled { background-color: #cccccc; cursor: not-allowed; }
 #ws-status.connected { color: green; font-weight: bold; }
 #ws-status.disconnected { color: red; font-weight: bold; }
 select { padding: 8px; margin-bottom: 10px; min-width: 150px; }
+
+/* Dual Range Slider Styles */
+.range-slider-container { margin-bottom: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+.range-slider-container h4 { margin-top: 0; margin-bottom: 10px; }
+.range-slider {
+  height: 5px;
+  position: relative;
+  background-color: #e1e9f6;
+  border-radius: 2px;
+  margin-top: 10px; /* Added margin for spacing */
+}
+.range-selected {
+  height: 100%;
+  left: 0%; /* Default, will be updated by JS */
+  right: 0%; /* Default, will be updated by JS */
+  position: absolute;
+  border-radius: 5px;
+  background-color: #1b53c0;
+}
+
+.range-input {
+  position: relative;
+}
+.range-input input[type="range"] {
+  position: absolute;
+  width: 100%;
+  height: 5px;
+  top: -5px; /* Adjusted to align with the .range-slider div */
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 0; /* remove default padding */
+  margin: 0; /* remove default margin */
+}
+/* Specific styling for thumbs to override general input[type="range"] */
+.range-input input[type="range"]::-webkit-slider-thumb {
+  height: 18px; /* Adjusted size */
+  width: 18px;  /* Adjusted size */
+  border-radius: 50%;
+  border: 2px solid #1b53c0; /* Adjusted border */
+  background-color: #fff;
+  pointer-events: auto;
+  -webkit-appearance: none;
+}
+.range-input input[type="range"]::-moz-range-thumb {
+  height: 14px; /* Adjusted size */
+  width: 14px; /* Adjusted size */
+  border-radius: 50%;
+  border: 2px solid #1b53c0; /* Adjusted border */
+  background-color: #fff;
+  pointer-events: auto;
+  -moz-appearance: none;
+}
+
+.range-values {
+    margin-top: 25px; /* Increased margin for spacing below sliders */
+    width: 100%;
+    display: flex;
+    justify-content: space-between; /* Adjusted for better spacing */
+    align-items: center;
+  }
+  .range-values label {
+    margin-right: 5px;
+    font-size: 0.9em; /* Slightly smaller label */
+  }
+  .range-values input[type="number"] {
+    width: 60px; /* Adjusted width */
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+  }
+  /* End Dual Range Slider Styles */
