@@ -357,6 +357,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                                 timeZonePosixString = doc["value"].as<String>();
                                 preferences.putString("tz_posix", timeZonePosixString);
                                 configTime(0, 0, "pool.ntp.org", timeZonePosixString.c_str()); // Re-apply time config
+                                Serial.printf("setPreference(timezone_posix): configTime re-called with POSIX: %s\n", timeZonePosixString.c_str()); // Logging added
                                 timeClient.setTimeOffset(0); // Ensure NTPClient knows its offset is 0 relative to system time
                                 if (timeClient.update()) { // Attempt to update time immediately
                                    Serial.println("[WSc] NTP time updated successfully after timezone change.");
@@ -700,6 +701,7 @@ showBongoCat();
                                    // Some versions of NTPClient might not have setDayLight.
                                    // If it causes issues or is unavailable, it can be omitted.
     Serial.println("NTP Client started (after POSIX configTime).");
+    Serial.printf("setup: configTime called with POSIX: %s\n", timeZonePosixString.c_str()); // Logging added
 
     // Immediately try to get the time at startup
     if (!timeClient.update()) {
@@ -708,6 +710,7 @@ showBongoCat();
       Serial.println("NTP time synchronized at startup.");
     }
     lastNTPUpdateTime = millis(); // Initialize the last update time
+    updateDisplay(); // Call updateDisplay once after initial NTP sync for logging
   }
 
 
@@ -945,19 +948,37 @@ void updateDisplay() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
 
+  char *tz_env = getenv("TZ");
+  Serial.printf("updateDisplay: System TZ environment variable: %s\n", tz_env ? tz_env : "NULL");
+
   if (WiFi.status() == WL_CONNECTED) {
     display.print("IP: ");
     display.println(WiFi.localIP());
     display.print("Time: ");
-    // display.println(timeClient.getFormattedTime()); // Old way
 
     time_t now;
-    struct tm timeinfo;
     time(&now); // Get current epoch time
-    localtime_r(&now, &timeinfo); // Convert to local time struct using system TZ (POSIX)
-    char buffer[12]; // Buffer for HH:MM:SS + null
-    strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
-    display.println(buffer);
+    Serial.printf("updateDisplay: Raw epoch from time(): %lu\n", (unsigned long)now);
+
+    if (now < 1609459200L) { // Check if time is past Jan 1, 2021 UTC (example threshold)
+        display.println("Time not set");
+        Serial.println("updateDisplay: Time appears not to be set by NTP yet.");
+    } else {
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+        // Log detailed timeinfo
+        // Note: tm_gmtoff and tm_zone are GNU extensions. If they cause compile error, remove them.
+        Serial.printf("updateDisplay: timeinfo: year=%d, mon=%d, day=%d, hour=%d, min=%d, sec=%d, isdst=%d, gmtoff=%ld, zone=%s\n",
+                      timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
+                      timeinfo.tm_isdst,
+                      (long)timeinfo.tm_gmtoff, // Cast to long for printf, if available
+                      timeinfo.tm_zone ? timeinfo.tm_zone : "N/A"); // if available
+
+        char buffer[12]; // Buffer for HH:MM:SS + null
+        strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
+        display.println(buffer);
+    }
 
     display.setCursor(0, 16); // Move to the second half of the screen
 
