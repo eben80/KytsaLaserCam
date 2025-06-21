@@ -603,11 +603,11 @@ showBongoCat();
   Serial.print("Loaded Max Velocity (Preferences): ");
   Serial.println(maxVel);
 
-  // Immediately set the Timezone environment variable after loading from preferences
-  Serial.printf("Setting TZ environment variable from preferences: %s\n", timeZonePosixString.c_str());
-  setenv("TZ", timeZonePosixString.c_str(), 1);
-  tzset(); // Apply the TZ setting
-  Serial.println("System TZ applied from preferences.");
+  // Timezone will be set after WiFi connection and configTime.
+  // Serial.printf("Setting TZ environment variable from preferences: %s\n", timeZonePosixString.c_str()); // Old position
+  // setenv("TZ", timeZonePosixString.c_str(), 1); // Old position
+  // tzset(); // Old position
+  // Serial.println("System TZ applied from preferences."); // Old position
 
   // NTP Client will be initialized after WiFi connects.
 
@@ -706,19 +706,17 @@ showBongoCat();
     Serial.println(staSSID);
     Serial.println(staPassword);
 
-    // Timezone (setenv/tzset) has already been set earlier from preferences.
-    // Now, configure system time with NTP server. Offsets are 0,0 because TZ env var handles it.
+    // Configure system time with NTP server. This might affect/reset TZ.
     configTime(0, 0, "pool.ntp.org");
-    Serial.printf("System time configured with NTP server 'pool.ntp.org'. TZ set by environment: %s\n", timeZonePosixString.c_str());
+    Serial.println("configTime called to set NTP server 'pool.ntp.org'.");
 
-    // Reinforce TZ setting before NTP client starts, just in case.
-    Serial.println("Reinforcing tzset() before NTP client operations.");
+    // NOW, set the definitive timezone using the loaded POSIX string.
+    Serial.printf("Setting definitive TZ environment variable: %s\n", timeZonePosixString.c_str());
+    setenv("TZ", timeZonePosixString.c_str(), 1);
     tzset();
+    Serial.println("Definitive TZ and tzset applied after configTime.");
 
-    Serial.println("Adding 1-second delay before NTPClient.begin()...");
-    delay(1000);
-
-    // Initialize NTP Client now that WiFi is connected and system time basics are set up.
+    // Initialize NTP Client now that WiFi is connected and system time/TZ are set up.
     timeClient.begin();
     timeClient.setTimeOffset(0); // Offset is 0 because TZ env var + localtime_r handle localization
     Serial.println("NTP Client started. Time offset 0, using system TZ.");
@@ -969,8 +967,8 @@ void updateDisplay() {
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
 
-  char *current_tz_env = getenv("TZ");
-  Serial.printf("[updateDisplay] Current getenv(\"TZ\"): %s\n", current_tz_env ? current_tz_env : "NULL");
+  // char *current_tz_env = getenv("TZ"); // Diagnostic logging removed
+  // Serial.printf("[updateDisplay] Current getenv(\"TZ\"): %s\n", current_tz_env ? current_tz_env : "NULL"); // Diagnostic logging removed
 
   if (WiFi.status() == WL_CONNECTED) {
     display.print("IP: ");
@@ -983,15 +981,15 @@ void updateDisplay() {
 
     if (now < 1609459200L) { // Check if time is past Jan 1, 2021 UTC (example threshold)
         display.println("Time not set");
-        Serial.printf("[updateDisplay] Time not set. Raw time_t: %lu\n", (unsigned long)now);
+        // Serial.printf("[updateDisplay] Time not set. Raw time_t: %lu\n", (unsigned long)now); // Diagnostic logging removed
     } else {
-        Serial.printf("[updateDisplay] Raw time_t 'now': %lu\n", (unsigned long)now);
+        // Serial.printf("[updateDisplay] Raw time_t 'now': %lu\n", (unsigned long)now); // Diagnostic logging removed
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
-        Serial.printf("[updateDisplay] timeinfo after localtime_r: Y=%d, M=%d, D=%d, H=%d, M=%d, S=%d, DST=%d\n",
-                      timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                      timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
-                      timeinfo.tm_isdst);
+        // Serial.printf("[updateDisplay] timeinfo after localtime_r: Y=%d, M=%d, D=%d, H=%d, M=%d, S=%d, DST=%d\n", // Diagnostic logging removed
+        //               timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, // Diagnostic logging removed
+        //               timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, // Diagnostic logging removed
+        //               timeinfo.tm_isdst); // Diagnostic logging removed
 
         char buffer[12]; // Buffer for HH:MM:SS + null
         strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
