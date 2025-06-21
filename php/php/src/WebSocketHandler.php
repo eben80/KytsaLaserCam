@@ -155,15 +155,15 @@ class WebSocketHandler implements MessageComponentInterface {
                                 }
                             }
                             if ($targetClient) {
-                                $commandPayload = ['command' => $data['command']];
-                                if(isset($data['value'])) {
-                                    $commandPayload['value'] = $data['value'];
-                                }
-                                if(isset($data['payload'])) {
-                                    $commandPayload['payload'] = $data['payload'];
-                                }
-                                $targetClient->send(json_encode($commandPayload));
-                                echo "Sent command to {$targetDeviceId} (conn {$targetClient->resourceId}): " . json_encode($commandPayload) . "\n";
+                                // Prepare the message to be sent to the ESP32
+                                // We'll take the original $data, remove targetDeviceId, and send the rest
+                                // This ensures 'type', 'command', 'key', 'value' etc. are all preserved.
+                                $messageToEsp32 = $data;
+                                unset($messageToEsp32['targetDeviceId']); // ESP32 doesn't need this field in its own message
+
+                                $messageJsonToEsp32 = json_encode($messageToEsp32);
+                                $targetClient->send($messageJsonToEsp32);
+                                echo "Relayed command to {$targetDeviceId} (conn {$targetClient->resourceId}): {$messageJsonToEsp32}\n";
                             } else {
                                  echo "Command failed: Target client for device {$targetDeviceId} not found among active connections.\n";
                                  $from->send(json_encode(['type' => 'error', 'message' => 'Target device client not found']));
