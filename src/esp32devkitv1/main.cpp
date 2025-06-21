@@ -1092,8 +1092,8 @@ void moveServosRandomlyNonBlocking() {
       startServoMovement(myservoX, movementX, randomX, moveTimeX);
       startServoMovement(myservoY, movementY, randomY, moveTimeY);
 
-      // Set a new random interval for the NEXT move, possibly based on current movement
-      movementInterval = random(minMotionInterval, maxMotionInterval + 1);
+      // Set a new random interval for the NEXT move using configured minVel and maxVel
+      movementInterval = random(minVel, maxVel + 1);
 
     }
 }
