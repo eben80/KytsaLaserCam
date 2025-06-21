@@ -30,8 +30,8 @@ NTPClient timeClient(ntpUDP);
 unsigned long lastNTPUpdateTime = 0;
 /** @brief Interval in milliseconds for updating time via NTP. */
 long ntpUpdateInterval = 60 * 60 * 1000; // Update every hour
-/** @brief Timezone offset in hours from UTC. */
-int timeZoneOffset = 2; // Default to CEST (UTC+2) - Changed to int
+/** @brief Timezone POSIX string for DST handling. */
+String timeZonePosixString = "UTC0"; // Default to UTC0
 /** @brief Flag indicating if random servo motion is currently manually activated. */
 bool randomMotionActive = false; // Toggled by the web button
 /** @brief Flag indicating if an active scheduled movement has been temporarily overridden (e.g., by manual stop). */
@@ -351,11 +351,22 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                             else if (strcmp(key, "max_vel") == 0) { maxVel = doc["value"].as<int>(); preferences.putInt("max_vel", maxVel); preferenceChanged = true; }
                             else if (strcmp(key, "timezone") == 0) {
                                 timeZoneOffset = doc["value"].as<int>();
-                                preferences.putInt("timezone", timeZoneOffset);
-                                timeClient.setTimeOffset(timeZoneOffset * 3600); // Apply immediately
-                                timeClient.update(); // Attempt to update time with new offset
+                                // timeZoneOffset = doc["value"].as<int>(); // Old integer offset logic removed
+                                // preferences.putInt("timezone", timeZoneOffset);
+                                // timeClient.setTimeOffset(timeZoneOffset * 3600);
+                                // timeClient.update();
+                                // lastNTPUpdateTime = millis();
+                                // preferenceChanged = true;
+                                Serial.println("[WSc] 'timezone' (integer offset) key is deprecated. Use 'timezone_posix'.");
+                            }
+                            else if (strcmp(key, "timezone_posix") == 0) {
+                                timeZonePosixString = doc["value"].as<String>();
+                                preferences.putString("tz_posix", timeZonePosixString);
+                                configTime(0, 0, "pool.ntp.org", timeZonePosixString.c_str()); // Re-apply time config
+                                timeClient.update(); // Attempt to update time immediately
                                 lastNTPUpdateTime = millis(); // Reset NTP update timer
                                 preferenceChanged = true;
+                                Serial.printf("[WSc] Timezone POSIX string updated to: %s\n", timeZonePosixString.c_str());
                             }
                             else if (strcmp(key, "ntp_interval") == 0) {
                                 ntpUpdateInterval = doc["value"].as<long>(); // Value is in ms from web UI
@@ -568,10 +579,10 @@ showBongoCat();
   maxY = preferences.getInt("max_y", 135); // Default to 180 if not found
   minVel = preferences.getInt("min_vel", 800); // Default to 800 if not found
   maxVel = preferences.getInt("max_vel", 2000); // Default to 2000 if not found
-  timeZoneOffset = preferences.getInt("timezone", 2);  // Load timezone, default to 2
+  timeZonePosixString = preferences.getString("tz_posix", "UTC0"); // Load POSIX TZ string
   ntpUpdateInterval = preferences.getLong("ntp_interval", 60 * 60 * 1000); // Load interval
-  Serial.print("Loaded Timezone Offset (Preferences): ");
-  Serial.println(timeZoneOffset);
+  Serial.print("Loaded Timezone POSIX String (Preferences): ");
+  Serial.println(timeZonePosixString);
   Serial.print("Loaded NTP Update Interval (Preferences): ");
   Serial.println(ntpUpdateInterval);
 
@@ -674,10 +685,22 @@ showBongoCat();
     staPassword = WiFi.psk();
     Serial.println(staSSID);
     Serial.println(staPassword);
-    // Initialize NTP Client
+
+    // Configure time using POSIX string for proper DST handling
+    // The first two arguments (GMToffset and DSToffset) are 0 when a POSIX string is used,
+    // as the POSIX string itself defines these.
+    configTime(0, 0, "pool.ntp.org", timeZonePosixString.c_str());
+    Serial.printf("Time configured with POSIX string: %s\n", timeZonePosixString.c_str());
+
+    // Initialize NTP Client - after configTime, setTimeOffset for NTPClient should be 0
+    // as POSIX string handles the actual offset and DST.
     timeClient.begin();
-    timeClient.setTimeOffset(timeZoneOffset * 3600); // Apply loaded timezone
-    Serial.println("NTP Client started.");
+    timeClient.setTimeOffset(0); // POSIX string handles the actual offset
+    // timeClient.setDayLight(false); // Not strictly needed as POSIX string handles DST rules.
+                                   // Some versions of NTPClient might not have setDayLight.
+                                   // If it causes issues or is unavailable, it can be omitted.
+    Serial.println("NTP Client started (after POSIX configTime).");
+
     // Immediately try to get the time at startup
     if (!timeClient.update()) {
       Serial.println("Failed to get NTP time at startup.");
@@ -789,7 +812,8 @@ void sendSystemConfig() {
 
     config_obj["min_vel"] = minVel;
     config_obj["max_vel"] = maxVel;
-    config_obj["timezone"] = timeZoneOffset; // Already an int (hours)
+    // config_obj["timezone"] = timeZoneOffset; // Old integer offset - REMOVED
+    config_obj["timezone_posix"] = timeZonePosixString; // Send POSIX string
     config_obj["ntp_interval"] = ntpUpdateInterval; // Already a long (ms)
     // config_obj["cam_led_active"] = camLedActive;
 
