@@ -967,13 +967,11 @@ void updateDisplay() {
         struct tm timeinfo;
         localtime_r(&now, &timeinfo);
         // Log detailed timeinfo
-        // Note: tm_gmtoff and tm_zone are GNU extensions. If they cause compile error, remove them.
-        Serial.printf("updateDisplay: timeinfo: year=%d, mon=%d, day=%d, hour=%d, min=%d, sec=%d, isdst=%d, gmtoff=%ld, zone=%s\n",
+        Serial.printf("updateDisplay: timeinfo: year=%d, mon=%d, day=%d, hour=%d, min=%d, sec=%d, isdst=%d\n",
                       timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
                       timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
-                      timeinfo.tm_isdst,
-                      (long)timeinfo.tm_gmtoff, // Cast to long for printf, if available
-                      timeinfo.tm_zone ? timeinfo.tm_zone : "N/A"); // if available
+                      timeinfo.tm_isdst);
+                      // Removed tm_gmtoff and tm_zone as they are not standard
 
         char buffer[12]; // Buffer for HH:MM:SS + null
         strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
