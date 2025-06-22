@@ -4,8 +4,8 @@
 #include <ArduinoOTA.h>
 #include <ESP32Servo.h>
 // #include <EEPROM.h>
-#include "soc/soc.h"
-#include "soc/rtc_cntl_reg.h"
+#include "soc/soc.h"             // For `soc_caps.h` and low-level system functions
+#include "soc/rtc_cntl_reg.h"    // For `RTC_CNTL_BROWN_OUT_REG`
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -19,116 +19,182 @@
 #include <ArduinoJson.h>
 #include <time.h> // For time_t, tm, time(), localtime_r(), strftime()
 
+/**
+ * @file main.cpp
+ * @brief Main firmware for the ESP32 DevKit V1 controlling the Kytsa Laser Toy.
+ *
+ * This firmware manages WiFi connectivity, WebSocket communication with a remote server,
+ * servo control for laser movement, NTP time synchronization, timezone handling,
+ * scheduled automated movements ("Kytsa Workouts"), interaction with an ESP32-CAM
+ * for video streaming, and an OLED display for status information.
+ * It uses Preferences for persistent storage of settings and WiFiManager for
+ * initial WiFi configuration.
+ */
 
+// Global Objects and Configuration Variables
+
+/** @brief Preferences object for Non-Volatile Storage (NVS). Used to store settings persistently. */
 Preferences preferences;
 
-// NTP Settings
+// --- NTP and Time Settings ---
 /** @brief UDP client for NTP communication. */
 WiFiUDP ntpUDP;
-/** @brief NTP client instance for time synchronization. */
+/** @brief NTP client instance for time synchronization. Managed by this firmware. */
 NTPClient timeClient(ntpUDP);
-/** @brief Timestamp of the last successful NTP update. */
+/** @brief Timestamp (millis()) of the last successful NTP update. */
 unsigned long lastNTPUpdateTime = 0;
-/** @brief Interval in milliseconds for updating time via NTP. */
-long ntpUpdateInterval = 60 * 60 * 1000; // Update every hour
-/** @brief Timezone POSIX string for DST handling. */
-String timeZonePosixString = "UTC0"; // Default to UTC0
-/** @brief Flag indicating if random servo motion is currently manually activated. */
-bool randomMotionActive = false; // Toggled by the web button
-/** @brief Flag indicating if an active scheduled movement has been temporarily overridden (e.g., by manual stop). */
-bool scheduledMovementOverridden = false; // To temporarily stop scheduled movement
-/** @brief Flag indicating if a scheduled movement is currently active based on NTP time and configured slots. */
-bool isScheduledMovementActive = false; // Tracks if the schedule is currently active
-/** @brief Flag indicating if the device is currently in a configuration mode (e.g., being adjusted via old HTTP interface, less relevant with WebSocket). */
-bool inConfiguration = false; // Flag to indicate if in configuration mode
-/** @brief String storing the start time of the currently active or next scheduled movement. */
+/** @brief Interval in milliseconds for attempting NTP updates. Default is 1 hour. Configurable via web UI. */
+long ntpUpdateInterval = 60 * 60 * 1000;
+/** @brief Timezone POSIX string (e.g., "EST5EDT,M3.2.0/2,M11.1.0/2"). Loaded from NVS, default "UTC0". Configurable. */
+String timeZonePosixString = "UTC0";
+
+// --- Motion and Scheduling State ---
+/** @brief True if random servo motion is currently manually activated via the web UI. */
+bool randomMotionActive = false;
+/** @brief True if an active scheduled movement has been temporarily overridden (e.g., by manual stop via UI). Currently not fully implemented. */
+bool scheduledMovementOverridden = false;
+/** @brief True if a scheduled "Kytsa Workout" is currently active based on NTP time and configured timer slots. */
+bool isScheduledMovementActive = false;
+/** @brief Flag to indicate if the device is in a special configuration mode (legacy, less relevant with WebSocket). */
+bool inConfiguration = false;
+/** @brief String storing the HH:MM start time of the currently active or next scheduled movement. For display. */
 String currentScheduleStartTime = "";
-/** @brief String storing the stop time of the currently active or next scheduled movement. */
+/** @brief String storing the HH:MM stop time of the currently active or next scheduled movement. For display. */
 String currentScheduleStopTime = "";
 
-// Define the serial port to use (adjust if needed)
-/** @brief HardwareSerial instance used for communication with the ESP32CAM. */
-HardwareSerial& serialPort = Serial2; // Use Serial2 (RX2, TX2)
-
-/** @brief Flag indicating if WiFi was connected via WiFiManager's Access Point mode. */
-bool wifiConnectedAP = false;
-/** @brief SSID of the currently connected Wi-Fi network. */
+// --- ESP32-CAM Communication ---
+/** @brief HardwareSerial instance (Serial2) used for communication with the ESP32-CAM. */
+HardwareSerial& serialPort = Serial2;
+/** @brief SSID of the currently connected Wi-Fi network, shared with ESP32-CAM. */
 String staSSID;
-/** @brief Password for the currently connected Wi-Fi network. */
+/** @brief Password for the currently connected Wi-Fi network, shared with ESP32-CAM. */
 String staPassword;
-/** @brief IP address of the connected ESP32CAM, received over serial. */
+/** @brief IP address of the connected ESP32-CAM, received over serial. Empty if not connected/reported. */
 String esp32CamIP = "";
-/** @brief Flag indicating if communication with the ESP32CAM has been established. */
+/** @brief True if communication with the ESP32-CAM has been established (e.g., IP received). */
 bool esp32CamConnected = false;
-/** @brief Flag indicating if the ESP32CAM is currently streaming video. */
+/** @brief True if the ESP32-CAM is currently commanded to stream video. */
 bool streaming = false;
-/** @brief Tracks the state of the CAM LED. */
+/** @brief True if the ESP32-CAM's LED is currently commanded to be active. */
 bool camLedActive = false;
 
+// --- WiFi State ---
+/** @brief True if WiFi was connected using credentials obtained via WiFiManager's Access Point mode during the current session. */
+bool wifiConnectedAP = false;
 
+// --- Display Settings ---
+/** @brief Width of the OLED display in pixels. */
 #define SCREEN_WIDTH 128
+/** @brief Height of the OLED display in pixels. */
 #define SCREEN_HEIGHT 32
+/** @brief Reset pin for the OLED display (-1 if not used, managed by I2C). */
 #define OLED_RESET     -1
+/** @brief Adafruit SSD1306 display object instance. */
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-
-
+// --- Servo Objects and Pin Definitions ---
+/** @brief Servo object for the X-axis (pan). */
 Servo myservoX;
+/** @brief Servo object for the Y-axis (tilt). */
 Servo myservoY;
 
+/** @brief GPIO pin connected to the X-axis servo signal line. */
 const int servoPinX = 13;
+/** @brief GPIO pin connected to the Y-axis servo signal line. */
 const int servoPinY = 12;
-const int outputPin = 25;
+/** @brief GPIO pin used to control the laser module. (HIGH for ON, LOW for OFF - needs verification). */
+const int outputPin = 25; // Typically for Laser
+/** @brief GPIO pin used to control the auxiliary relay. (HIGH for ON, LOW for OFF - needs verification). */
 const int relayPin = 26;
+/** @brief GPIO pin for Touch Pad 1 (used for sleep/wake and other interactions). */
 const int touchPin1 = 32;
-const int touchPin2 = 33; // New touch pin
-// Define I2C pins
+/** @brief GPIO pin for Touch Pad 2 (used for settings and other interactions). */
+const int touchPin2 = 33;
+/** @brief GPIO pin for I2C SDA (connected to OLED display). */
 const int SDA_PIN = 21;
+/** @brief GPIO pin for I2C SCL (connected to OLED display). */
 const int SCL_PIN = 18;
 
-const int threshold = 75;  // Touch sensitivity threshold
-int touchValue;
-bool laserActive = true;  // Default ON
-bool relayActive = true;  // Default ON
-bool settingsMode = false;      // Declare globally
-int currentSetting = 0;         // Declare globally
+// --- Touch Input and Device State ---
+/** @brief Threshold for touch pin sensitivity. Lower values are more sensitive. */
+const int threshold = 75;
+/** @brief Stores the raw value read from a touch pin. */
+int touchValue; // Note: This seems to be a generic variable, might be better localized or removed if not broadly used.
+/** @brief True if the laser is currently commanded to be active. Default ON at boot (before specific control). */
+bool laserActive = true;
+/** @brief True if the relay is currently commanded to be active. Default ON at boot. */
+bool relayActive = true;
+/** @brief True if the device is in the touch-based settings adjustment mode. */
+bool settingsMode = false;
+/** @brief Index for the current setting being adjusted in touch-based settings mode. */
+int currentSetting = 0;
 
-// Function to handle random motion
+// --- Random Motion Parameters ---
+/** @brief Timestamp (millis()) of the last random motion execution. */
 unsigned long lastMotionTime = 0;
-unsigned long minMotionInterval = 100; // Minimum interval in milliseconds
-unsigned long maxMotionInterval = 3000; // Maximum interval in milliseconds
+/** @brief Minimum interval (ms) between random movements when `minVel`/`maxVel` are not used (legacy). */
+unsigned long minMotionInterval = 100;
+/** @brief Maximum interval (ms) between random movements when `minVel`/`maxVel` are not used (legacy). */
+unsigned long maxMotionInterval = 3000;
 
+// --- Timer Schedule Data Structures ---
+/**
+ * @struct TimeSlot
+ * @brief Represents a single scheduled time slot for automated "Kytsa Workouts".
+ */
 struct TimeSlot {
-  int startTimeMinutes; // Minutes from the start of the day (0-1439)
-  int stopTimeMinutes;  // Minutes from the start of the day (0-1439)
-  bool active;          // Flag to indicate if this timeslot is currently active
+  int startTimeMinutes; ///< Start time of the slot in minutes from the beginning of the day (0-1439).
+  int stopTimeMinutes;  ///< Stop time of the slot in minutes from the beginning of the day (0-1439).
+  bool active;          ///< Runtime flag, true if this timeslot is currently considered active by the scheduling logic.
 };
 
-const int MAX_TIMERS = 5; // Define a maximum number of timers we can store
+/** @brief Maximum number of timer slots that can be configured and stored. */
+const int MAX_TIMERS = 5;
+/** @brief Array to hold the configured timer slots. */
 TimeSlot timeSlots[MAX_TIMERS];
-int numTimeSlots;
+/** @brief Current number of active/configured timer slots in the `timeSlots` array. */
+int numTimeSlots = 0; // Initialized to 0, loaded from NVS in setup()
 
+// --- WiFiManager ---
+/** @brief WiFiManager object instance for simplified WiFi configuration. */
 WiFiManager wm;
 
-String header;
-String valueStringX = String(90);
-String valueStringY = String(90);
-int pos1 = 0;
-int pos2 = 0;
+// --- Legacy/Unused/General Variables (Review for cleanup) ---
+String header; // Potentially for HTTP server responses, seems unused in current WebSocket context.
+String valueStringX = String(90); // Seems to be for storing servo X position as string, possibly for older UI.
+String valueStringY = String(90); // Seems to be for storing servo Y position as string, possibly for older UI.
+int pos1 = 0; // Purpose unclear, potentially legacy.
+int pos2 = 0; // Purpose unclear, potentially legacy.
 
-unsigned long currentTime = millis();
-unsigned long previousTime = 0;
-const long timeoutTime = 2000;
+unsigned long currentTime = millis(); // Generic timestamp, often better to get current millis() directly when needed.
+unsigned long previousTime = 0;    // Generic timestamp, often better to use specific state variables.
+const long timeoutTime = 2000;     // Generic timeout, make specific if used for distinct purposes.
 
-int minX = 0, maxX = 180, minY = 45, maxY = 135;
+// --- Servo Axis Limits ---
+/** @brief Minimum angle for the X-axis servo. Loaded from NVS, default 0. */
+int minX = 0;
+/** @brief Maximum angle for the X-axis servo. Loaded from NVS, default 180. */
+int maxX = 180;
+/** @brief Minimum angle for the Y-axis servo. Loaded from NVS, default 45. */
+int minY = 45;
+/** @brief Maximum angle for the Y-axis servo. Loaded from NVS, default 135. */
+int maxY = 135;
 
-// Variables for random velocity
-int minVel = 800, maxVel = 2000; // Min and max delay times between movements - initialized
-unsigned long lastMovementTime = 0;
-unsigned long movementInterval = 1000;  // Default to 1 second between movements - initialized
+// --- Random Movement Velocity/Interval Settings ---
+/** @brief Minimum interval (ms) between random movements. Loaded from NVS, default 800ms. Configurable. */
+int minVel = 800;
+/** @brief Maximum interval (ms) between random movements. Loaded from NVS, default 2000ms. Configurable. */
+int maxVel = 2000;
+/** @brief Timestamp (millis()) of the last random movement command issued. (Potentially redundant with `lastMotionTime` depending on exact usage). */
+unsigned long lastMovementTime = 0; // Review: Seems similar to lastMotionTime.
+/** @brief Current interval (ms) between random movements, randomized between `minVel` and `maxVel`. */
+unsigned long movementInterval = 1000;
 
-// Movement tracking
-/** @brief Structure to manage smooth servo movement. */
+// --- Smooth Servo Movement Tracking ---
+/**
+ * @struct ServoMovement
+ * @brief Structure to manage parameters for smooth, non-blocking servo movement.
+ */
 struct ServoMovement {
   /** @brief Starting position of the servo for the current movement. */
   int startPos;
@@ -144,40 +210,48 @@ ServoMovement movementX = {0, 0, 0, 0, false}; // Servo X movement tracking
 /** @brief Tracks the current movement state for servo Y. */
 ServoMovement movementY = {0, 0, 0, 0, false}; // Servo Y movement tracking
 
-// WebSocket Global Variables
-/** @brief Instance of the WebSocket client used for communication with the server. */
+// --- WebSocket Global Variables and Configuration ---
+/** @brief Instance of the WebSocketsClient library used for communication with the central server. */
 WebSocketsClient webSocket;
 /** @brief Flag indicating the current connection status of the WebSocket. True if connected, false otherwise. */
 bool webSocketConnected = false;
-/** @brief Timestamp of the last attempt to reconnect the WebSocket. Used to manage reconnection intervals. */
+/** @brief Timestamp (millis()) of the last attempt to reconnect the WebSocket. Used to manage reconnection intervals. */
 unsigned long webSocketLastReconnectAttempt = 0;
-/** @brief Interval in milliseconds between WebSocket reconnection attempts. */
-const unsigned long webSocketReconnectInterval = 5000; // Try to reconnect every 5 seconds
-/** @brief Unique identifier for this ESP32 device, typically derived from its MAC address. */
-String deviceId = ""; // Will be set to ESP32 Chip ID
-// Define WebSocket server details
+/** @brief Interval in milliseconds between WebSocket reconnection attempts. Default is 5 seconds. */
+const unsigned long webSocketReconnectInterval = 5000;
+/** @brief Unique identifier for this ESP32 device, derived from its MAC address. Sent during pairing. */
+String deviceId = "";
+// --- WebSocket Server Details ---
 /** @brief Hostname or IP address of the WebSocket server. */
 const char* wsHost = "ebski.co";
-/** @brief Port number for the WebSocket server. WebSocket Secure (WSS) port. */
+/** @brief Port number for the WebSocket server (e.g., 80 for ws, 443 for wss). Currently set for non-secure WS. */
 const uint16_t wsPort = 80;
-/** @brief Path for the WebSocket endpoint on the server. (e.g., wss://ebski.co/ws) */
+/** @brief Path for the WebSocket endpoint on the server (e.g., "/ws"). */
 const char* wsPath = "/ws";
 
+/**
+ * @brief Function executed upon waking from deep sleep.
+ * @note This function is marked with RTC_IRAM_ATTR to be placed in IRAM,
+ *       which is necessary for functions executed during deep sleep wakeup.
+ *       It re-enables the laser and relay by default after wakeup.
+ */
 void RTC_IRAM_ATTR esp_wake_deep_sleep() {
-  esp_default_wake_deep_sleep();
+  esp_default_wake_deep_sleep(); // Default ESP-IDF deep sleep wake stub
+  // Re-initialize desired states after wakeup
   laserActive = true;
   relayActive = true;
-  digitalWrite(outputPin, HIGH);
-  digitalWrite(relayPin, HIGH);
+  digitalWrite(outputPin, HIGH); // Turn laser ON
+  digitalWrite(relayPin, HIGH);  // Turn relay ON
 }
 
 /**
- * @brief Generates a unique device ID from the ESP32's MAC address.
- * @return A String representing the unique chip ID.
+ * @brief Generates a unique device ID (chip ID) from the ESP32's MAC address.
+ * This ID is used to identify the device to the WebSocket server.
+ * @return A String representing the unique chip ID (hexadecimal format).
  */
 String getChipId() {
-    uint64_t chipid = ESP.getEfuseMac();
-    char chipid_str[17];
+    uint64_t chipid = ESP.getEfuseMac(); // Read MAC address
+    char chipid_str[17]; // Buffer for string (16 chars + null terminator)
     snprintf(chipid_str, sizeof(chipid_str), "%04X%08X", (uint16_t)(chipid >> 32), (uint32_t)chipid);
     return String(chipid_str);
 }
@@ -192,14 +266,16 @@ void updateDisplay(); // Forward declaration for OLED update
 
 
 /**
- * @brief Handles events from the WebSocket client.
+ * @brief Callback function to handle WebSocket events.
  *
- * This function is called by the WebSocketsClient library when various events occur,
- * such as connection, disconnection, or when a message is received.
+ * This function is registered with the WebSocketsClient and is called when various
+ * WebSocket events occur, such as connection, disconnection, text messages, etc.
+ * It processes incoming commands from the server (originated by the web UI) and
+ * manages the WebSocket connection state.
  *
- * @param type The type of WebSocket event that occurred.
- * @param payload A pointer to the data payload associated with the event (if any).
- * @param length The length of the payload.
+ * @param type The type of WebSocket event (e.g., WStype_DISCONNECTED, WStype_CONNECTED, WStype_TEXT).
+ * @param payload Pointer to the payload data for the event. For TEXT events, this is the message string.
+ * @param length Length of the payload data in bytes.
  */
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     // Add a Serial.printf at the top to see ALL event types coming in
@@ -448,73 +524,122 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     }
 }
 
+/**
+ * @brief Callback function triggered by WiFiManager when new WiFi credentials are saved.
+ *
+ * This function updates global variables `wifiConnectedAP`, `staSSID`, and `staPassword`
+ * with the new credentials. It is typically used when WiFiManager has been in AP mode
+ * and successfully obtained credentials from the user.
+ * @note This function is registered with `wm.setSaveConfigCallback(saveWifiCallback);`
+ *       but that line is currently commented out in `setup()`.
+ */
 void saveWifiCallback() {
-  Serial.println("WiFi credentials saved");
-  wifiConnectedAP = true;
+  Serial.println("WiFi credentials saved by WiFiManager.");
+  wifiConnectedAP = true; // Indicate that WiFi was connected/configured via AP mode this session.
   staSSID = WiFi.SSID();
   staPassword = WiFi.psk();
 }
 
-// Function to get formatted time
+/**
+ * @brief Gets the current time as a formatted string (HH:MM:SS) from the NTPClient.
+ * @note This time is UTC unless the NTPClient's offset is explicitly set,
+ *       which is not the case here as `timeClient.setTimeOffset(0)` is used.
+ *       For localized time, use `time_t` with `localtime_r` and `strftime`.
+ * @return String containing the formatted time (HH:MM:SS).
+ */
 String getFormattedTime() {
-  return timeClient.getFormattedTime();
+  return timeClient.getFormattedTime(); // NTPClient's formatted time (usually UTC)
 }
 
+/**
+ * @brief Converts a time string in "HH:MM" format to total minutes from the start of the day.
+ *
+ * @param formattedTime A String representing time in "HH:MM" format.
+ * @return int Total minutes from midnight (0-1439), or -1 if the input format is invalid or time is out of range.
+ */
 int timeToMinutes(String formattedTime) {
-  // Basic validation for HH:MM format
   if (formattedTime.length() != 5 || formattedTime.charAt(2) != ':') {
-    Serial.println("Invalid time format for timeToMinutes: " + formattedTime);
-    return -1; // Indicate error
+    Serial.println("Invalid time format for timeToMinutes: " + formattedTime + ". Expected HH:MM");
+    return -1;
   }
   int hours = formattedTime.substring(0, 2).toInt();
   int minutes = formattedTime.substring(3, 5).toInt();
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    Serial.println("Invalid time value for timeToMinutes: " + formattedTime);
-    return -1; // Indicate error
+    Serial.println("Invalid time value for timeToMinutes: " + formattedTime + ". Values out of range.");
+    return -1;
   }
   return hours * 60 + minutes;
 }
 
+/**
+ * @brief Converts total minutes from the start of the day to a time string in "HH:MM" format.
+ *
+ * @param totalMinutes Total minutes from midnight (0-1439).
+ * @return String Time in "HH:MM" format, or "N/A" if `totalMinutes` is out of valid range.
+ */
 String minutesToTime(int totalMinutes) {
-  if (totalMinutes < 0 || totalMinutes >= (24 * 60)) { // Check if totalMinutes is outside 0-1439 range
+  if (totalMinutes < 0 || totalMinutes >= (24 * 60)) {
     // Serial.printf("Invalid totalMinutes value for minutesToTime: %d\n", totalMinutes); // Optional: Log this
-    return "N/A"; // Or some other indicator of invalid time
+    return "N/A";
   }
   int hours = (totalMinutes / 60) % 24;
   int minutes = totalMinutes % 60;
   return String(hours < 10 ? "0" : "") + String(hours) + ":" + String(minutes < 10 ? "0" : "") + String(minutes);
 }
 
-/** @brief Turns the laser connected to outputPin ON. */
+/**
+ * @brief Turns the laser connected to `outputPin` ON.
+ * Assumes `outputPin` is correctly configured as OUTPUT.
+ */
 void turnLaserOn() {
   digitalWrite(outputPin, HIGH);
+  // laserActive = true; // State variable 'laserActive' should be updated by caller if this function is used standalone.
 }
 
-/** @brief Turns the laser connected to outputPin OFF. */
+/**
+ * @brief Turns the laser connected to `outputPin` OFF.
+ * Assumes `outputPin` is correctly configured as OUTPUT.
+ */
 void turnLaserOff() {
   digitalWrite(outputPin, LOW);
+  // laserActive = false; // State variable 'laserActive' should be updated by caller.
 }
 
-/** @brief Displays a message on the OLED screen prompting user to connect to the WiFiManager AP. */
+/**
+ * @brief Displays a message on the OLED screen prompting the user to connect to the WiFiManager Access Point ("MiauAP").
+ * This is typically called when WiFiManager enters AP mode.
+ */
 void displayConnectAPMessage() {
   display.clearDisplay();
-  display.setTextSize(1); // Larger text size
+  display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
   display.println("Connect to WiFi:");
-  display.setTextSize(2);
+  display.setTextSize(2); // Larger text for AP name
   display.println("MiauAP");
   display.display();
 }
 
 
-
+/**
+ * @brief Callback function for WiFiManager when it enters configuration mode (Access Point mode).
+ *
+ * This function calls `displayConnectAPMessage()` to show instructions on the OLED.
+ * @param myWiFiManager Pointer to the WiFiManager instance. Not used in this function but required by the callback signature.
+ */
 void configModeCallback (WiFiManager *myWiFiManager) {
-displayConnectAPMessage();
-
+  // Parameter myWiFiManager is not used in this specific callback implementation,
+  // but it's part of the function signature required by WiFiManager.
+  // (void)myWiFiManager; // Optional: suppress unused parameter warning if compiler flags are strict.
+  displayConnectAPMessage();
 }
 
+/**
+ * @brief Displays a short "Bongo Cat" animation sequence on the OLED.
+ * Used as a startup animation.
+ */
 void showBongoCat(){
+  // Frame 1: Base Bongo Cat
   display.drawBitmap(0, 0, bongocat, 128, 32, WHITE);
   display.display();
   delay(10);

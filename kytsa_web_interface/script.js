@@ -1,55 +1,102 @@
+/**
+ * @file script.js
+ * @brief Client-side JavaScript for the Kytsa Laser Control web interface.
+ *
+ * This script handles WebSocket communication with the backend server,
+ * manages UI elements for device selection, control, configuration,
+ * and status display. It includes logic for live video streaming,
+ * timer scheduling ("Kytsa Workouts"), servo limit adjustments,
+ * and other device-specific commands.
+ */
 document.addEventListener('DOMContentLoaded', () => {
+    // DOM Element References
+    /** @type {HTMLElement | null} Displays WebSocket connection status. */
     const wsStatusEl = document.getElementById('ws-status');
+    /** @type {HTMLSelectElement | null} Dropdown for selecting the target ESP32 device. */
     const deviceSelectEl = document.getElementById('deviceSelect');
+    /** @type {HTMLElement | null} Displays the ID of the currently selected device. */
     const selectedDeviceIdEl = document.getElementById('selected-device-id');
+    /** @type {HTMLElement | null} Preformatted text area for displaying raw device status JSON. */
     const deviceStatusEl = document.getElementById('deviceStatus');
+    /** @type {HTMLImageElement | null} Image element for displaying the MJPEG video stream. */
     const streamImgEl = document.getElementById('stream');
+    /** @type {HTMLElement | null} Span indicating which device the main controls are targeting. */
     const controlTargetDeviceEl = document.getElementById('control-target-device');
+    /** @type {HTMLElement | null} Span indicating which device the status display is for. */
     const statusTargetDeviceEl = document.getElementById('status-target-device');
 
     // X-Axis Dual Range Slider Elements
+    /** @type {HTMLInputElement | null} Range input for X-axis minimum limit. */
     const servoXMinRangeEl = document.getElementById('servoXMinRange');
+    /** @type {HTMLInputElement | null} Range input for X-axis maximum limit. */
     const servoXMaxRangeEl = document.getElementById('servoXMaxRange');
+    /** @type {HTMLElement | null} Span visually representing the selected range on X-axis slider. */
     const servoXRangeSelectedEl = document.getElementById('servoXRangeSelected');
+    /** @type {HTMLInputElement | null} Number input for X-axis minimum limit. */
     const servoXMinValueEl = document.getElementById('servoXMinValue');
+    /** @type {HTMLInputElement | null} Number input for X-axis maximum limit. */
     const servoXMaxValueEl = document.getElementById('servoXMaxValue');
 
     // Y-Axis Dual Range Slider Elements
+    /** @type {HTMLInputElement | null} Range input for Y-axis minimum limit. */
     const servoYMinRangeEl = document.getElementById('servoYMinRange');
+    /** @type {HTMLInputElement | null} Range input for Y-axis maximum limit. */
     const servoYMaxRangeEl = document.getElementById('servoYMaxRange');
+    /** @type {HTMLElement | null} Span visually representing the selected range on Y-axis slider. */
     const servoYRangeSelectedEl = document.getElementById('servoYRangeSelected');
+    /** @type {HTMLInputElement | null} Number input for Y-axis minimum limit. */
     const servoYMinValueEl = document.getElementById('servoYMinValue');
+    /** @type {HTMLInputElement | null} Number input for Y-axis maximum limit. */
     const servoYMaxValueEl = document.getElementById('servoYMaxValue');
 
+    /** @type {HTMLButtonElement | null} Button to toggle random motion on the ESP32. */
     const randomMotionToggleBtn = document.getElementById('randomMotionToggle');
 
     // Timer controls
+    /** @type {HTMLInputElement | null} Time input for setting a workout start time. */
     const timerStartTimeEl = document.getElementById('timerStartTime');
+    /** @type {HTMLInputElement | null} Time input for setting a workout end time. */
     const timerEndTimeEl = document.getElementById('timerEndTime');
+    /** @type {HTMLButtonElement | null} Button to add a new workout timer. */
     const addTimerBtn = document.getElementById('addTimerBtn');
+    /** @type {HTMLElement | null} Div element to display the list of configured timers. */
     const timerListEl = document.getElementById('timerList');
 
     // CAM control buttons (consolidated)
+    /** @type {HTMLButtonElement | null} Button to toggle the ESP32-CAM video stream. */
     const toggleCamStreamBtn = document.getElementById('toggleCamStreamBtn');
+    /** @type {HTMLButtonElement | null} Button to toggle the ESP32-CAM LED. */
     const toggleCamLedBtn = document.getElementById('toggleCamLedBtn');
 
     // Collapsible section elements
-    const toggleDeviceConfigBtn = document.getElementById('toggleDeviceConfigBtn'); // Renamed
-    const deviceConfigContent = document.getElementById('deviceConfigContent'); // Renamed
+    /** @type {HTMLButtonElement | null} Button to toggle visibility of the device configuration section. */
+    const toggleDeviceConfigBtn = document.getElementById('toggleDeviceConfigBtn');
+    /** @type {HTMLElement | null} Div container for device configuration controls. */
+    const deviceConfigContent = document.getElementById('deviceConfigContent');
+    /** @type {HTMLButtonElement | null} Button to toggle visibility of the device status section. */
     const toggleDeviceStatusBtn = document.getElementById('toggleDeviceStatusBtn');
+    /** @type {HTMLElement | null} Div container for displaying device status. */
     const deviceStatusContent = document.getElementById('deviceStatusContent');
 
     // Velocity Dual Range Slider Elements
+    /** @type {HTMLInputElement | null} Range input for minimum velocity/interval. */
     const velMinRangeEl = document.getElementById('velMinRange');
+    /** @type {HTMLInputElement | null} Range input for maximum velocity/interval. */
     const velMaxRangeEl = document.getElementById('velMaxRange');
+    /** @type {HTMLElement | null} Span visually representing the selected velocity/interval range. */
     const velRangeSelectedEl = document.getElementById('velRangeSelected');
+    /** @type {HTMLInputElement | null} Number input for minimum velocity/interval. */
     const velMinValueEl = document.getElementById('velMinValue');
+    /** @type {HTMLInputElement | null} Number input for maximum velocity/interval. */
     const velMaxValueEl = document.getElementById('velMaxValue');
 
     // Timezone and NTP Selectors
+    /** @type {HTMLSelectElement | null} Dropdown for selecting the device's timezone. */
     const timezoneSelectEl = document.getElementById('timezoneSelect');
+    /** @type {HTMLSelectElement | null} Dropdown for selecting the NTP update interval. */
     const ntpIntervalSelectEl = document.getElementById('ntpIntervalSelect');
 
+    /** @type {Array<HTMLElement|null>} Array of all major control elements, used for batch enabling/disabling. */
     const allControls = [
         servoXMinRangeEl, servoXMaxRangeEl, servoXMinValueEl, servoXMaxValueEl,
         servoYMinRangeEl, servoYMaxRangeEl, servoYMinValueEl, servoYMaxValueEl,
@@ -61,28 +108,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const RANGE_MIN_DIFFERENCE = 10; // Minimum difference between min and max thumbs of a range slider
 
-    /** @type {WebSocket | null} The main WebSocket connection instance. */
-    let socket;
-    /** @type {string | null} The device ID of the currently selected ESP32 device. */
+    // --- Global State Variables ---
+    /**
+     * The main WebSocket connection instance.
+     * @type {WebSocket | null}
+     */
+    let socket = null;
+    /**
+     * The device ID of the currently selected ESP32 device from the dropdown.
+     * @type {string | null}
+     */
     let selectedDeviceId = null;
-    /** @type {Object<string, Object>} Stores the last known state for each device. deviceId -> { stateKey: stateValue }. */
-    let deviceStates = {}; // { deviceId: { key: value } }
+    /**
+     * Stores the last known state/configuration for each device, keyed by deviceId.
+     * Example: `deviceStates['D4627C931744'] = { min_x: 10, random_motion_active: false, ... }`
+     * @type {Object<string, Object>}
+     */
+    let deviceStates = {};
 
-    // Laser control during X/Y adjustment
+    // --- Control Logic Variables ---
+    /**
+     * Timeout ID for automatically turning off the laser after manual servo adjustment.
+     * @type {number | null}
+     */
     let laserOffTimeoutId = null;
+    /**
+     * Delay in milliseconds before automatically turning off the laser after X/Y adjustment.
+     * @const {number}
+     */
     const LASER_OFF_DELAY = 10000; // 10 seconds
 
-    // State variables and timeouts for CAM controls
+    /**
+     * Tracks the client-side optimistic state of the CAM stream. Updated by status messages.
+     * @type {boolean}
+     */
     let isStreamActive = false;
+    /**
+     * Timeout ID to prevent rapid toggling of the CAM stream.
+     * @type {number | null}
+     */
     let streamToggleTimeoutId = null;
+    /**
+     * Tracks the client-side optimistic state of the CAM LED. Updated by status messages.
+     * @type {boolean}
+     */
     let isCamLedActive = false;
+    /**
+     * Timeout ID to prevent rapid toggling of the CAM LED.
+     * @type {number | null}
+     */
     let ledToggleTimeoutId = null;
+    /**
+     * Cooldown period in milliseconds for CAM control toggles.
+     * @const {number}
+     */
     const CAM_TOGGLE_TIMEOUT = 2000; // 2 seconds
 
     /**
-     * Enables or disables all control elements on the page.
-     * Also updates the text indicating which device is being controlled.
-     * @param {boolean} disabled - True to disable controls, false to enable.
+     * Enables or disables all interactive control elements on the page.
+     * Also updates the text indicating which device is currently being controlled.
+     * @param {boolean} disabled - True to disable controls, false to enable them.
      */
     function setControlsDisabled(disabled) {
         allControls.forEach(control => {
@@ -94,13 +179,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Establishes a WebSocket connection to the server.
-     * Sets up event handlers for open, message, close, and error events.
-     * Attempts to reconnect on close or error with a randomized delay.
+     * Establishes and manages the WebSocket connection to the server.
+     * Sets up event handlers for `onopen`, `onmessage`, `onclose`, and `onerror`.
+     * Includes logic for attempting reconnection on close or error.
      */
     function connectWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // Assuming Nginx is on the same host, proxying /ws
+        // Assumes the WebSocket server is accessible via a path on the same host as the web UI,
+        // potentially proxied by a web server like Nginx.
         const wsUrl = `${protocol}//${window.location.host}/ws`;
         console.log(`Attempting to connect to WebSocket: ${wsUrl}`);
 
