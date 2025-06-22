@@ -355,11 +355,13 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         valueStringY = String(val);
                         Serial.printf("Executed servoY: %d\n", val);
                     } else if (strcmp(command, "LASER_ON") == 0) {
-                        turnLaserOn();
-                        Serial.println("Executed LASER_ON");
+                        turnLaserOn(); // Directly controls digitalWrite
+                        laserActive = true; // Update state flag
+                        Serial.println("Executed LASER_ON, laserActive set to true");
                     } else if (strcmp(command, "LASER_OFF") == 0) {
-                        turnLaserOff();
-                        Serial.println("Executed LASER_OFF");
+                        turnLaserOff(); // Directly controls digitalWrite
+                        laserActive = false; // Update state flag
+                        Serial.println("Executed LASER_OFF, laserActive set to false");
                     } else if (strcmp(command, "RELAY_ON") == 0) {
                         digitalWrite(relayPin, HIGH);
                         relayActive = true;
@@ -1502,15 +1504,27 @@ void loop() {
   }
 
   // Call random movement if the schedule says it should AND it's not overridden, OR if the button is toggled ON
-  if ((isScheduledMovementActive && !scheduledMovementOverridden) || randomMotionActive) { // isScheduledMovementActive is now more robust
-    moveServosRandomlyNonBlocking(); // Call the non-blocking random movement function
-    if (laserActive) turnLaserOn(); // Consider if laserActive should gate this
+  if ((isScheduledMovementActive && !scheduledMovementOverridden) || randomMotionActive) {
+    moveServosRandomlyNonBlocking();
+  }
+
+  // New laser control logic:
+  // The laser should be ON if:
+  //   a) A scheduled movement is active (and not overridden) OR
+  //   b) Random (manual) motion is active OR
+  //   c) The `laserActive` flag (set by direct command like from UI configuration) is true.
+  // Otherwise, it should be OFF.
+  bool autoActivityDemandsLaser = (isScheduledMovementActive && !scheduledMovementOverridden) || randomMotionActive;
+
+  if (autoActivityDemandsLaser) {
+      digitalWrite(outputPin, HIGH); // Automated activity demands laser to be ON
   } else {
-    // Only turn laser off if not in configuration AND no manual override keeps it on
-    // Assuming laserActive is the override/manual state.
-    if (!inConfiguration && laserActive) { turnLaserOff(); }
-    else if (!inConfiguration && !laserActive) { /* already off */ }
-    else if (inConfiguration && laserActive) { /* keep on during config if it was on */ }
+      // No automated activity demanding laser. State depends on the manual/timed `laserActive` flag.
+      if (laserActive) {
+          digitalWrite(outputPin, HIGH); // Laser was turned ON by command and should remain ON.
+      } else {
+          digitalWrite(outputPin, LOW);  // Laser is not demanded by activity and is commanded OFF.
+      }
   }
 
   updateServoMovement(myservoX, movementX); // Update X servo movement
