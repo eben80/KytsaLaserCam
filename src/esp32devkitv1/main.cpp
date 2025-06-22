@@ -120,8 +120,8 @@ const int SCL_PIN = 18;
 const int threshold = 75;
 /** @brief Stores the raw value read from a touch pin. */
 int touchValue; // Note: This seems to be a generic variable, might be better localized or removed if not broadly used.
-/** @brief True if the laser is currently commanded to be active. Default ON at boot (before specific control). */
-bool laserActive = true;
+/** @brief True if the laser is currently commanded to be active. Defaults to OFF at boot. Managed by UI commands and automated activities. */
+bool laserActive = false;
 /** @brief True if the relay is currently commanded to be active. Default ON at boot. */
 bool relayActive = true;
 /** @brief True if the device is in the touch-based settings adjustment mode. */
@@ -800,7 +800,9 @@ showBongoCat();
   pinMode(relayPin, OUTPUT);
   turnLaserOn();
   delay(500);
-  turnLaserOff();
+  turnLaserOff(); // Physical laser pin is now LOW. laserActive is already false by global default.
+  // laserActive = false; // This line is now redundant due to global default.
+  // Serial.println("Laser test in setup complete. Initial laserActive state set to false."); // Redundant log.
   digitalWrite(relayPin, HIGH);
   // Calculate halfway positions
   // int initialX = (minX + maxX) / 2;
