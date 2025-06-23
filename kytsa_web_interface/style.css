@@ -11,8 +11,197 @@ input[type="range"] { width: calc(100% - 70px); } /* Further adjust width */
 button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 5px; margin-right: 5px; }
 button:hover { background-color: #0056b3; }
 button:disabled { background-color: #cccccc; cursor: not-allowed; }
-#stream-container img { max-width: 100%; height: auto; border: 1px solid #ddd; background-color: #f0f0f0; }
+#stream-container #stream { /* Made selector more specific */
+    max-width: 100%;
+    height: auto;
+    display: block; /* Added display: block */
+    border: 1px solid #ddd;
+    background-color: #000; /* Black background for active stream */
+    /* transform: rotate(180deg); Style moved to inline HTML for default state or JS controlled class */
+}
+
+#stream-placeholder-text {
+    width: 100%;
+    /* Maintain aspect ratio, e.g., 4:3. Adjust padding-bottom as needed. */
+    /* For a fixed height, just set height directly e.g., height: 240px; */
+    height: 0;
+    padding-bottom: 75%; /* 4:3 aspect ratio (3/4 * 100%) */
+    position: relative; /* For absolute positioning of text if needed, or use flex for centering */
+    background-color: #e9e9e9; /* Light grey background */
+    border: 1px solid #ccc;
+    display: flex; /* Use flexbox for centering */
+    align-items: center;
+    justify-content: center;
+    color: #555; /* Text color */
+    font-size: 1.2em;
+    text-align: center;
+    border-radius: 4px; /* Optional: match other elements */
+    box-sizing: border-box; /* Ensure padding and border are included in width/height */
+}
+
 #deviceStatus { min-height: 100px; white-space: pre-wrap; background-color: #e9e9e9; padding: 10px; border-radius: 4px; font-family: monospace; overflow-x: auto; }
 #ws-status.connected { color: green; font-weight: bold; }
 #ws-status.disconnected { color: red; font-weight: bold; }
 select { padding: 8px; margin-bottom: 10px; min-width: 150px; }
+
+/* Dual Range Slider Styles */
+.range-slider-container { margin-bottom: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+.range-slider-container h4 { margin-top: 0; margin-bottom: 10px; }
+.range-slider {
+  height: 5px;
+  position: relative;
+  background-color: #e1e9f6;
+  border-radius: 2px;
+  margin-top: 10px; /* Added margin for spacing */
+}
+.range-selected {
+  height: 100%;
+  left: 0%; /* Default, will be updated by JS */
+  right: 0%; /* Default, will be updated by JS */
+  position: absolute;
+  border-radius: 5px;
+  background-color: #1b53c0;
+}
+
+.range-input {
+  position: relative;
+}
+.range-input input[type="range"] {
+  position: absolute;
+  width: 100%;
+  height: 5px;
+  top: -5px; /* Adjusted to align with the .range-slider div */
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 0; /* remove default padding */
+  margin: 0; /* remove default margin */
+}
+/* Specific styling for thumbs to override general input[type="range"] */
+.range-input input[type="range"]::-webkit-slider-thumb {
+  height: 18px; /* Adjusted size */
+  width: 18px;  /* Adjusted size */
+  border-radius: 50%;
+  border: 2px solid #1b53c0; /* Adjusted border */
+  background-color: #fff;
+  pointer-events: auto;
+  -webkit-appearance: none;
+}
+.range-input input[type="range"]::-moz-range-thumb {
+  height: 14px; /* Adjusted size */
+  width: 14px; /* Adjusted size */
+  border-radius: 50%;
+  border: 2px solid #1b53c0; /* Adjusted border */
+  background-color: #fff;
+  pointer-events: auto;
+  -moz-appearance: none;
+}
+
+.range-values {
+    margin-top: 25px; /* Increased margin for spacing below sliders */
+    width: 100%;
+    display: flex;
+    justify-content: space-between; /* Adjusted for better spacing */
+    align-items: center;
+  }
+  .range-values label {
+    margin-right: 5px;
+    font-size: 0.9em; /* Slightly smaller label */
+  }
+  .range-values input[type="number"] {
+    width: 60px; /* Adjusted width */
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+  }
+  /* End Dual Range Slider Styles */
+
+/* Responsive layout for smaller screens */
+@media (max-width: 768px) { /* Adjust breakpoint as needed */
+    .container {
+        flex-direction: column;
+    }
+    .controls, .stream-section {
+        width: 100%; /* Make sections full width when stacked */
+        min-width: 0; /* Reset min-width to allow full shrinking if necessary */
+        flex-basis: auto; /* Reset flex-basis */
+        margin-bottom: 20px; /* Add some space between stacked sections */
+    }
+    .stream-section {
+        order: -1; /* Optional: Move stream to top on mobile if desired */
+    }
+}
+
+/* Status Indicators */
+#statusIndicatorsContainer {
+    display: flex;
+    align-items: center;
+    gap: 20px; /* Space between indicators */
+    padding: 10px;
+    background-color: #e9e9e9;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+}
+
+/* WiFi Strength Indicator */
+.wifi-indicator {
+    gap: 2px; /* Space between bars */
+}
+
+.wifi-bar {
+    width: 5px;
+    background-color: #ccc; /* Default inactive color */
+    border-radius: 1px;
+}
+
+.wifi-bar:nth-child(1) { height: 6px; }
+.wifi-bar:nth-child(2) { height: 10px; }
+.wifi-bar:nth-child(3) { height: 14px; }
+.wifi-bar:nth-child(4) { height: 18px; }
+
+.wifi-bar.active {
+    background-color: #007bff; /* Active color (e.g., blue) */
+}
+.wifi-bar.weak { background-color: #ffc107; } /* Yellow for weak */
+.wifi-bar.fair { background-color: #fd7e14; } /* Orange for fair */
+.wifi-bar.good { background-color: #28a745; } /* Green for good */
+.wifi-bar.excellent { background-color: #007bff; } /* Blue for excellent */
+
+
+/* Status Lights (Laser, Workout) */
+.status-light {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background-color: #ccc; /* Default inactive color */
+    border: 1px solid #aaa;
+    transition: background-color 0.3s ease;
+}
+
+.status-light.active { /* Green for active (used by workout indicators) */
+    background-color: #28a745;
+    border-color: #1e7e34;
+}
+
+.status-light.laser-on { /* Red for laser ON */
+    background-color: #dc3545;
+    border-color: #c82333;
+}
+
+/* Styling for the new indicator groups (label + light) */
+.indicator-group {
+    display: flex;
+    align-items: center;
+    gap: 5px; /* Space between label and light */
+}
+
+.indicator-label {
+    font-size: 0.9em;
+    color: #555;
+}
