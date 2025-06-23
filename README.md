@@ -15,7 +15,12 @@ Kytsa Laser Control is a comprehensive remote-controlled laser toy system design
     *   Selectable timezones with POSIX string support for accurate local time display and scheduling.
     *   Configurable NTP update intervals.
 *   **Responsive Web Interface:** Access and control the system from desktop or mobile devices.
+    *   **Graphical Status Indicators:** Real-time visual feedback for WiFi signal strength, laser activity (Red for ON, Grey for OFF), manual workout status (Green for Active), and scheduled workout status (Green for Active).
+    *   **Improved Stream Placeholder:** Clear "Stream Offline" text displayed when the video stream is not active, replacing the default broken image icon.
 *   **Multi-Device Support:** The web interface can list and target multiple ESP32 laser units.
+*   **OLED Display Management:**
+    *   Onboard OLED screen shows current time, IP address, and device status.
+    *   **Burn-in Prevention:** Display automatically turns off after a period of inactivity and wakes up on touch or relevant command.
 *   **OTA Updates:** Firmware supports Over-The-Air updates for easier maintenance.
 
 ## System Components
@@ -82,7 +87,8 @@ Kytsa Laser Control is a comprehensive remote-controlled laser toy system design
 The web interface allows you to:
 
 *   **Select Device:** If multiple Kytsa Laser units are online, you can choose which one to control.
-*   **View Live Stream:** See the video feed from the selected device's ESP32-CAM.
+*   **Status Indicators:** At-a-glance view of WiFi strength, Laser status, Manual Workout activity, and Scheduled Workout activity.
+*   **View Live Stream:** See the video feed from the selected device's ESP32-CAM. Shows "Stream Offline" when not active.
 *   **Make Kytsa run...:** Toggle random automated laser movement.
 *   **Live Streaming Controls:** Start/stop the video stream and toggle the ESP32-CAM's LED.
 *   **Kytsa Workouts:** Add, view, and delete scheduled time slots for automated play sessions.

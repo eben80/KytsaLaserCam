@@ -31,7 +31,8 @@ The system is comprised of the following main components:
     *   **Preference Management:** Stores and retrieves settings (servo limits, velocity intervals, timezone, NTP interval, timer schedules) from Non-Volatile Storage (NVS).
     *   **Scheduled Automation ("Kytsa Workouts"):** Executes pre-configured random movement schedules based on the current time.
     *   **Serial Communication with ESP32-CAM:** Manages the ESP32-CAM by sending commands and receiving status information.
-    *   **Status Reporting:** Sends periodic status updates (`statusUpdate`) and full configuration (`systemConfig`) to the WebSocket server for the web interface.
+    *   **OLED Display Management:** Controls an onboard OLED screen to display status information (IP, time, current mode). Implements a screen-off timer after a period of inactivity to prevent burn-in, waking on touch or relevant commands.
+    *   **Status Reporting:** Sends periodic status updates (`statusUpdate` - including data for UI indicators like WiFi RSSI, laser state, movement states) and full configuration (`systemConfig`) to the WebSocket server for the web interface.
     *   **Command Processing:** Receives JSON-formatted commands from the WebSocket server (originating from the web UI) and acts upon them.
 
 ---
@@ -58,8 +59,10 @@ The system is comprised of the following main components:
     *   **WebSocket Client:** Establishes a WebSocket connection to the central WebSocket Server (via Nginx proxy at `ebski.co/ws`).
     *   **Device Discovery & Selection:** Lists available ESP32 DevKit devices (as reported by the server) and allows the user to select one to control.
     *   **Command Transmission:** Sends user-initiated commands as JSON messages to the WebSocket server, targeted at the selected device.
-    *   **Status & Configuration Display:** Receives `statusUpdate` and `systemConfig` messages from the WebSocket server and updates the UI.
-    *   **Video Stream Display:** Embeds and displays the MJPEG video stream by setting an `<img>` tag's `src` attribute to `ebski.co/stream`.
+    *   **Status & Configuration Display:** Receives `statusUpdate` and `systemConfig` messages from the WebSocket server and updates the UI. This includes:
+        *   Displaying raw status and configuration data.
+        *   Updating graphical status indicators (WiFi strength, Laser On/Off, Manual Workout Active, Scheduled Workout Active).
+    *   **Video Stream Display:** Embeds and displays the MJPEG video stream. Shows a user-friendly "Stream Offline" text placeholder when the stream is not active.
 
 ---
 

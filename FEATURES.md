@@ -24,11 +24,17 @@ Every pet is unique, and so is every home.
 📱 **Smart, Simple, Seamless! (Easy Control & Modern Tech)**
 We believe advanced technology should make life easier, not more complicated.
 *   **Intuitive Web Interface:** Our clean, responsive web UI makes controlling Kytsa a breeze from any device with a web browser.
+    *   **At-a-Glance Status:** Clear graphical indicators show WiFi strength, current laser activity (Red for ON, Grey for OFF), and whether a manual or scheduled workout is in progress (Green for Active).
+    *   **Clear Stream Feedback:** The video stream area now displays a user-friendly "Stream Offline" message when not active, instead of a broken image.
 *   **Effortless Setup:** Get started quickly with simple WiFi configuration.
 *   **Multi-Pet, Multi-Room Ready:** The system is designed to support multiple Kytsa Laser units, all manageable from the same interface.
 
-💡 **More Than Just a Laser!**
-*   **System & Time Savvy:** Supports various timezones and configurable NTP updates, ensuring your scheduled workouts run like clockwork, no matter where you are.
+💡 **Device Awareness & Care!**
+*   **Onboard Info Display:** The ESP32 device features an OLED screen showing time, IP, and current status.
+*   **OLED Protection:** To ensure longevity, the OLED display automatically turns off after a period of inactivity and instantly wakes up on touch or when a command is received.
+
+🌍 **System & Time Savvy!** (Renamed from "More Than Just a Laser!")
+*   **Global Ready:** Supports various timezones and configurable NTP updates, ensuring your scheduled workouts run like clockwork, no matter where you are.
 *   **Expandable Fun:** An auxiliary relay output means future possibilities for integrating other toys or environmental effects!
 
 ---
