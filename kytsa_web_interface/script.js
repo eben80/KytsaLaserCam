@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const deviceStatusEl = document.getElementById('deviceStatus');
     /** @type {HTMLImageElement | null} Image element for displaying the MJPEG video stream. */
     const streamImgEl = document.getElementById('stream');
+    /** @type {HTMLElement | null} Div element for displaying text when the stream is offline. */
+    const streamPlaceholderTextEl = document.getElementById('stream-placeholder-text');
     /** @type {HTMLElement | null} Span indicating which device the main controls are targeting. */
     const controlTargetDeviceEl = document.getElementById('control-target-device');
     /** @type {HTMLElement | null} Span indicating which device the status display is for. */
@@ -260,10 +262,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             isStreamActive = message.data.esp32cam_streaming;
                             if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = isStreamActive ? 'Stop CAM Stream' : 'Start CAM Stream';
                             // Update stream image source based on actual streaming state
-                            if (isStreamActive && streamImgEl) {
+                            if (isStreamActive && streamImgEl && streamPlaceholderTextEl) {
                                 streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
-                            } else if (streamImgEl) {
+                                streamImgEl.style.display = 'block';
+                                streamPlaceholderTextEl.style.display = 'none';
+                            } else if (streamImgEl && streamPlaceholderTextEl) {
                                 streamImgEl.src = "#";
+                                streamImgEl.style.display = 'none';
+                                streamPlaceholderTextEl.style.display = 'block'; // Or 'flex' if using flex for centering
                             }
                         }
                         if (message.data.cam_led_active !== undefined) {
@@ -361,10 +367,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         // if (message.config.hasOwnProperty('esp32cam_streaming')) {
                         //     isStreamActive = message.config.esp32cam_streaming;
                         //     if(toggleCamStreamBtn) toggleCamStreamBtn.textContent = isStreamActive ? 'Stop CAM Stream' : 'Start CAM Stream';
-                        //     if (isStreamActive && streamImgEl) {
+                        //     if (isStreamActive && streamImgEl && streamPlaceholderTextEl) {
                         //        streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
-                        //     } else if (streamImgEl) {
+                        //        streamImgEl.style.display = 'block';
+                        //        streamPlaceholderTextEl.style.display = 'none';
+                        //     } else if (streamImgEl && streamPlaceholderTextEl) {
                         //        streamImgEl.src = "#";
+                        //        streamImgEl.style.display = 'none';
+                        //        streamPlaceholderTextEl.style.display = 'block'; // or 'flex'
                         //     }
                         // }
 
@@ -418,7 +428,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (toggleCamLedBtn) toggleCamLedBtn.textContent = 'Turn CAM LED ON';
             isStreamActive = false;
             isCamLedActive = false;
-            if (streamImgEl) streamImgEl.src = "#";
+            if (streamImgEl && streamPlaceholderTextEl) {
+                streamImgEl.src = "#";
+                streamImgEl.style.display = 'none';
+                streamPlaceholderTextEl.style.display = 'block'; // Or 'flex'
+            }
 
             // Laser safety: If WebSocket closes and laser timer was active, clear it.
             // turnLaserOff() already has a check for selectedDeviceId, so it won't send command if no device.
@@ -629,11 +643,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (toggleCamLedBtn) toggleCamLedBtn.textContent = 'Turn CAM LED ON';
                 // Stream image will be set by systemConfig/statusUpdate. Initial src set here for immediate feedback.
                 // if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`; // This might be too soon if stream isn't active
+                // Set initial stream placeholder state for selected device (stream likely off)
+                if (streamImgEl && streamPlaceholderTextEl) {
+                    streamImgEl.style.display = 'none';
+                    streamPlaceholderTextEl.style.display = 'block'; // or 'flex'
+                }
             } else {
                 setControlsDisabled(true);
                 if (deviceStatusEl) deviceStatusEl.textContent = 'Waiting for updates...';
                 updateUIToggleStates({}); // Clears random motion toggle text
-                if (streamImgEl) streamImgEl.src = "#";
+                if (streamImgEl && streamPlaceholderTextEl) {
+                     streamImgEl.src = "#";
+                     streamImgEl.style.display = 'none';
+                     streamPlaceholderTextEl.style.display = 'block'; // or 'flex'
+                }
                 if (timerListEl) timerListEl.innerHTML = ''; // Clear timers
 
                 // Laser safety: If a device is deselected and laser timer was active, turn laser off
@@ -753,11 +776,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isStreamActive) {
                 sendCommand({ command: 'STOP_STREAM' });
                 toggleCamStreamBtn.textContent = 'Start CAM Stream'; // Optimistic
-                if (streamImgEl) streamImgEl.src = "#";
+                if (streamImgEl && streamPlaceholderTextEl) {
+                    streamImgEl.src = "#";
+                    streamImgEl.style.display = 'none';
+                    streamPlaceholderTextEl.style.display = 'block'; // or 'flex'
+                }
             } else {
                 sendCommand({ command: 'START_STREAM' });
                 toggleCamStreamBtn.textContent = 'Stop CAM Stream'; // Optimistic
-                if (streamImgEl) streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
+                if (streamImgEl && streamPlaceholderTextEl) {
+                    streamImgEl.src = `https://ebski.co/stream?t=${new Date().getTime()}`;
+                    streamImgEl.style.display = 'block';
+                    streamPlaceholderTextEl.style.display = 'none';
+                }
             }
             isStreamActive = !isStreamActive; // Optimistic toggle
             toggleCamStreamBtn.disabled = true;

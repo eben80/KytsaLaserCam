@@ -16,9 +16,29 @@ button:disabled { background-color: #cccccc; cursor: not-allowed; }
     height: auto;
     display: block; /* Added display: block */
     border: 1px solid #ddd;
-    background-color: #f0f0f0;
-    transform: rotate(180deg);
+    background-color: #000; /* Black background for active stream */
+    /* transform: rotate(180deg); Style moved to inline HTML for default state or JS controlled class */
 }
+
+#stream-placeholder-text {
+    width: 100%;
+    /* Maintain aspect ratio, e.g., 4:3. Adjust padding-bottom as needed. */
+    /* For a fixed height, just set height directly e.g., height: 240px; */
+    height: 0;
+    padding-bottom: 75%; /* 4:3 aspect ratio (3/4 * 100%) */
+    position: relative; /* For absolute positioning of text if needed, or use flex for centering */
+    background-color: #e9e9e9; /* Light grey background */
+    border: 1px solid #ccc;
+    display: flex; /* Use flexbox for centering */
+    align-items: center;
+    justify-content: center;
+    color: #555; /* Text color */
+    font-size: 1.2em;
+    text-align: center;
+    border-radius: 4px; /* Optional: match other elements */
+    box-sizing: border-box; /* Ensure padding and border are included in width/height */
+}
+
 #deviceStatus { min-height: 100px; white-space: pre-wrap; background-color: #e9e9e9; padding: 10px; border-radius: 4px; font-family: monospace; overflow-x: auto; }
 #ws-status.connected { color: green; font-weight: bold; }
 #ws-status.disconnected { color: red; font-weight: bold; }
