@@ -224,6 +224,14 @@ String deviceId = "";
 // --- WebSocket Server Details ---
 /** @brief Hostname or IP address of the WebSocket server. */
 const char* wsHost = "ebski.co";
+
+// --- OLED Burn-in Prevention ---
+/** @brief Timestamp (millis()) of the last detected display activity. */
+unsigned long lastDisplayActivityTime = 0;
+/** @brief Timeout in milliseconds for turning off OLED due to inactivity. (e.g., 10 minutes) */
+const unsigned long DISPLAY_INACTIVITY_TIMEOUT = 10 * 60 * 1000;
+/** @brief Flag to track if the OLED is currently off due to inactivity. */
+bool isDisplayOffByInactivity = false;
 /** @brief Port number for the WebSocket server (e.g., 80 for ws, 443 for wss). Currently set for non-secure WS. */
 const uint16_t wsPort = 80;
 /** @brief Path for the WebSocket endpoint on the server (e.g., "/ws"). */
@@ -324,6 +332,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     Serial.printf("[DEBUG] Received standard command: %s\n", command);
 
                     if (strcmp(command, "addTimer_value") == 0) { // New handler
+                        recordDisplayActivity();
                         Serial.println("[DEBUG] Received 'addTimer_value' command.");
                         const char* dataStr = doc["value"]; // Expect data in "value" field
                         if (dataStr) {
@@ -345,58 +354,71 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     // Deprecated addTimer handlers fully removed.
                     // Standard commands:
                     else if (strcmp(command, "servoX") == 0) {
+                        recordDisplayActivity();
                         int val = doc["value"];
                         myservoX.write(val);
                         valueStringX = String(val);
                         Serial.printf("Executed servoX: %d\n", val);
                     } else if (strcmp(command, "servoY") == 0) {
+                        recordDisplayActivity();
                         int val = doc["value"];
                         myservoY.write(val);
                         valueStringY = String(val);
                         Serial.printf("Executed servoY: %d\n", val);
                     } else if (strcmp(command, "LASER_ON") == 0) {
+                        recordDisplayActivity();
                         turnLaserOn(); // Directly controls digitalWrite
                         laserActive = true; // Update state flag
                         Serial.println("Executed LASER_ON, laserActive set to true");
                     } else if (strcmp(command, "LASER_OFF") == 0) {
+                        recordDisplayActivity();
                         turnLaserOff(); // Directly controls digitalWrite
                         laserActive = false; // Update state flag
                         Serial.println("Executed LASER_OFF, laserActive set to false");
                     } else if (strcmp(command, "RELAY_ON") == 0) {
+                        recordDisplayActivity();
                         digitalWrite(relayPin, HIGH);
                         relayActive = true;
                         Serial.println("Executed RELAY_ON");
                     } else if (strcmp(command, "RELAY_OFF") == 0) {
+                        recordDisplayActivity();
                         digitalWrite(relayPin, LOW);
                         relayActive = false;
                         Serial.println("Executed RELAY_OFF");
                     } else if (strcmp(command, "RANDOM_MOTION_TOGGLE") == 0) {
+                        recordDisplayActivity();
                         randomMotionActive = !randomMotionActive;
                         Serial.printf("Random motion toggled: %s\n", randomMotionActive ? "ON" : "OFF");
                         sendSystemConfig(); // Send feedback for UI update
                     }
                     // Commands for ESP32CAM
                     else if (strcmp(command, "START_STREAM") == 0) {
+                        recordDisplayActivity();
                         Serial2.println("START_STREAM");
                         Serial.println("Sent command to ESP32CAM: START_STREAM");
                         streaming = true;
                     } else if (strcmp(command, "STOP_STREAM") == 0) {
+                        recordDisplayActivity();
                         Serial2.println("STOP_STREAM");
                         Serial.println("Sent command to ESP32CAM: STOP_STREAM");
                         streaming = false;
                     } else if (strcmp(command, "CAM_LED_ON") == 0) {
+                        recordDisplayActivity();
                         Serial2.println("LED_ON");
                         Serial.println("Sent command to ESP32CAM: LED_ON");
                         camLedActive = true;
                     } else if (strcmp(command, "CAM_LED_OFF") == 0) {
+                        recordDisplayActivity();
                         Serial2.println("LED_OFF");
                         Serial.println("Sent command to ESP32CAM: LED_OFF");
                         camLedActive = false;
                     } else if (strcmp(command, "getSystemConfig") == 0) {
+                        // No display activity for getSystemConfig, it's a background request
                         Serial.println("[DEBUG] Received 'getSystemConfig' command.");
                         Serial.println("[DEBUG] Calling sendSystemConfig for getSystemConfig command.");
                         sendSystemConfig();
                     } else if (strcmp(command, "setServoLimit") == 0) {
+                        recordDisplayActivity();
                         const char* axis = doc["axis"];
                         const char* limit_type = doc["limit_type"];
                         int value = doc["value"]; // Assuming value is passed as int
@@ -415,11 +437,13 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         }
                     }
                     else if (strcmp(command, "deleteTimer") == 0) {
+                        recordDisplayActivity();
                         int timerIndex = doc["timerIndex"];
                         Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
                         deleteTimeSlot(timerIndex);
                         sendSystemConfig();
                     } else if (strcmp(command, "setPreference") == 0) {
+                        recordDisplayActivity(); // Any preference change implies user interaction
                         const char* key = doc["key"];
                         if (key) {
                             preferences.begin("servo_config", false);
@@ -456,7 +480,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                                 lastNTPUpdateTime = millis(); // Reset NTP update timer to force update sooner if configured interval is long
                                 preferenceChanged = true;
                                 Serial.printf("[WSc] Timezone POSIX string updated to: %s and applied.\n", timeZonePosixString.c_str());
-                                updateDisplay(); // Force OLED update to reflect new time immediately
+                                // updateDisplay(); // recordDisplayActivity will call this if display was off
                             }
                             else if (strcmp(key, "ntp_interval") == 0) {
                                 ntpUpdateInterval = doc["value"].as<long>(); // Value is in ms from web UI
@@ -902,6 +926,8 @@ showBongoCat();
 
   preferences.end(); // End preferences access after all setup loading/initial saving.
 
+  lastDisplayActivityTime = millis(); // Initialize display activity timer
+
     // IMPORTANT: WebSocket Receive Buffer Size for addTimer command
     // The "addTimer" command payload is being truncated, likely due to the default
     // WebSocket client receive buffer size being too small (observed truncation at ~22 bytes).
@@ -1264,6 +1290,20 @@ void displaySettings() {
   Serial.println("Exiting displaySettings()"); // Add this line
 }
 
+/**
+ * @brief Records display activity, resetting the inactivity timer and waking the display if it was off.
+ * Also calls updateDisplay() to refresh the screen content immediately.
+ */
+void recordDisplayActivity() {
+    lastDisplayActivityTime = millis();
+    if (isDisplayOffByInactivity) {
+        display.ssd1306_command(SSD1306_DISPLAYON);
+        isDisplayOffByInactivity = false;
+        Serial.println("Display turned ON due to activity.");
+        updateDisplay(); // Refresh display immediately
+    }
+}
+
 // Modified adjustSettings function to use Preferences
 void adjustSettings(int setting, bool increment) {
   switch (setting) {
@@ -1296,15 +1336,19 @@ void readTouch() {
       touchInProgress1 = true;
       shortTouchProcessed1 = false;
       longTouchProcessed1 = false;
+      // recordDisplayActivity(); // Record activity on initial touch detection
     } else {
       unsigned long touchDuration1 = millis() - touchStartTime1;
 
-      if (touchDuration1 >= 10000) {
+      if (touchDuration1 >= 10000 && !longTouchProcessed1) { // Ensure restart only happens once
+        recordDisplayActivity();
         Serial.println("Touch 1 held for 10 seconds - Restarting ESP32...");
         ESP.restart();
+        // longTouchProcessed1 = true; // Not strictly needed before restart but good practice
       }
 
       if (touchDuration1 >= 500 && !longTouchProcessed1 && touchDuration1 < 10000) {
+        recordDisplayActivity();
         // Sleep
         Serial.println("Long Touch 1 Detected - Turning OFF laser and relay");
         Serial2.println("STOP_STREAM");
@@ -1314,6 +1358,7 @@ void readTouch() {
         display.display();
         delay(2000);
         display.ssd1306_command(SSD1306_DISPLAYOFF);
+        isDisplayOffByInactivity = false; // Reset this flag as it's a manual off, not inactivity off
         laserActive = false;
         relayActive = false;
         digitalWrite(outputPin, LOW);
@@ -1325,15 +1370,16 @@ void readTouch() {
       }
 
       if (touchDuration1 < 500 && !shortTouchProcessed1 && !laserActive && !relayActive) {
+        recordDisplayActivity();
         // Wake
         Serial.println("Short Touch 1 Detected - Turning ON laser and relay");
-        display.ssd1306_command(SSD1306_DISPLAYON);
-        display.clearDisplay();
-        display.setCursor(0, 0);
-        display.print("Waking...");
-        display.display();
-        delay(2000);
-        updateDisplay();
+        // display.ssd1306_command(SSD1306_DISPLAYON); // recordDisplayActivity will handle this
+        // display.clearDisplay(); // updateDisplay in recordDisplayActivity will handle clear
+        display.setCursor(0, 0); // Keep this if specific cursor needed before updateDisplay
+        display.print("Waking..."); // Keep this immediate feedback
+        display.display(); // Keep this immediate feedback
+        // delay(2000); // May not be needed if updateDisplay is quick
+        // updateDisplay(); // recordDisplayActivity will handle this
         laserActive = true;
         relayActive = true;
         digitalWrite(outputPin, HIGH);
@@ -1357,18 +1403,27 @@ void readTouch() {
       touchInProgress2 = true;
       shortTouchProcessed2 = false;
       longTouchProcessed2 = false;
+      // recordDisplayActivity(); // Record activity on initial touch
     } else {
       unsigned long touchDuration2 = millis() - touchStartTime2;
 
       if (touchDuration2 >= 500 && !longTouchProcessed2) {
+        recordDisplayActivity();
         // Toggle Settings Mode
         Serial.println("Long Touch 2 Detected");
         longTouchProcessed2 = true;
 
         settingsMode = !settingsMode;  // Toggle settings mode *FIRST*
 
-        displaySettings();             // *THEN* update the display
-        delay(50);                     // Small delay to allow display update
+        // displaySettings(); // recordDisplayActivity calls updateDisplay, which handles non-settings mode.
+                           // For settings mode, we need to ensure displaySettings is called.
+        if (settingsMode) {
+            displaySettings(); // Explicitly call for settings mode
+        } else {
+            // updateDisplay() will be called by recordDisplayActivity if display was off,
+            // or by the main loop if it was already on.
+        }
+        // delay(50); // May not be needed
 
         if (settingsMode) {
           Serial.println("Entering settings mode.");
@@ -1378,6 +1433,7 @@ void readTouch() {
       }
 
       if (touchDuration2 < 500 && !shortTouchProcessed2) {
+        recordDisplayActivity();
         shortTouchProcessed2 = true;
         if (!settingsMode) {
           // Toggle Random Motion
@@ -1387,6 +1443,7 @@ void readTouch() {
           } else {
             Serial.println("Random motion is now inactive.");
           }
+          // updateDisplay() will be called by recordDisplayActivity or main loop
         } else {
           // Adjust Settings (using both buttons)
           if (touchValue1 < threshold) { // If Touch 1 is also pressed (decrement)
@@ -1398,6 +1455,7 @@ void readTouch() {
           }
           currentSetting = (currentSetting + 1) % 4; // Cycle through 0-3
           Serial.print("Next setting to adjust "); Serial.println(currentSetting);
+          // displaySettings() is called within adjustSettings.
         }
       }
     }
@@ -1494,24 +1552,34 @@ void loop() {
     }
   }
 
+  bool previousScheduledMovementActive = isScheduledMovementActive; // Store previous state
   isScheduledMovementActive = shouldMoveRandomlyThisCycle; // Update the global state
+
   if (isScheduledMovementActive) {
-    // Ensure that currentScheduleStartTime and currentScheduleStopTime are not "N/A" before using them
     if (scheduledStartTime != "N/A" && scheduledStopTime != "N/A") {
-        currentScheduleStartTime = scheduledStartTime; // Update the global start time
-        currentScheduleStopTime = scheduledStopTime;   // Update the global stop time
+        currentScheduleStartTime = scheduledStartTime;
+        currentScheduleStopTime = scheduledStopTime;
         turnLaserOn();
+        if (!previousScheduledMovementActive) { // If it just became active
+            Serial.println("Scheduled movement started. Recording display activity.");
+            recordDisplayActivity();
+        }
     } else {
-        // This case should ideally not be reached if shouldMoveRandomlyThisCycle is true
-        // because minutesToTime should have provided valid strings.
-        // But as a safeguard:
         isScheduledMovementActive = false; // Correct the state if times are N/A
         currentScheduleStartTime = "";
         currentScheduleStopTime = "";
+        if (previousScheduledMovementActive) { // If it just became inactive due to N/A times
+             Serial.println("Scheduled movement ended (invalid times). Recording display activity.");
+            recordDisplayActivity();
+        }
     }
-  } else {
-    currentScheduleStartTime = ""; // Clear the global start time when no schedule is active
-    currentScheduleStopTime = "";   // Clear the global stop time when no schedule is active
+  } else { // Not active in this cycle
+    currentScheduleStartTime = "";
+    currentScheduleStopTime = "";
+    if (previousScheduledMovementActive) { // If it just became inactive
+        Serial.println("Scheduled movement ended. Recording display activity.");
+        recordDisplayActivity();
+    }
   }
 
   // Call random movement if the schedule says it should AND it's not overridden, OR if the button is toggled ON
@@ -1548,9 +1616,21 @@ void loop() {
   // (Repetitive block removed)
 
   if (settingsMode) {
-    displaySettings();
+    // If in settings mode, ensure display activity is recorded so it doesn't turn off,
+    // and displaySettings itself handles screen updates.
+    // If settingsMode can be entered/exited by touch, readTouch() should call recordDisplayActivity().
+    // If settingsMode is toggled by other means (e.g. WebSocket command), that path should also call recordDisplayActivity().
+    // For now, assuming settingsMode implies active interaction.
+    if(isDisplayOffByInactivity) { // If it was off, turn it on to show settings
+        recordDisplayActivity(); // This will turn on and call updateDisplay - but we want displaySettings
+        displaySettings(); // So call displaySettings again if it was just woken up for settings.
+    } else {
+        displaySettings();
+    }
   } else {
-    updateDisplay();
+    if (!isDisplayOffByInactivity) { // Only update display if it's supposed to be on
+        updateDisplay();
+    }
   }
 
   // Status Sending Logic
@@ -1695,4 +1775,18 @@ void loop() {
   }
 
   delay(1); // Small delay in the main loop
+
+  // OLED Inactivity Check
+  if (!isDisplayOffByInactivity && WiFi.status() == WL_CONNECTED && (millis() - lastDisplayActivityTime > DISPLAY_INACTIVITY_TIMEOUT)) {
+    if (!randomMotionActive && !isScheduledMovementActive && !streaming) { // Only turn off if no critical activity is ongoing
+        display.ssd1306_command(SSD1306_DISPLAYOFF);
+        isDisplayOffByInactivity = true;
+        Serial.println("Display turned OFF due to inactivity.");
+    } else {
+        // If critical activity is ongoing, just reset the activity timer as if there was interaction
+        // This ensures the display stays on during these activities without needing explicit recordDisplayActivity() calls every second.
+        lastDisplayActivityTime = millis();
+        // Serial.println("Display inactivity timeout reached, but critical activity ongoing. Resetting timer."); // Optional debug
+    }
+  }
 }
