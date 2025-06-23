@@ -23,8 +23,18 @@
             <span class="wifi-bar"></span>
             <span class="wifi-bar"></span>
         </div>
-        <div id="laserStatusIndicator" class="status-indicator status-light" title="Laser Status"></div>
-        <div id="workoutStatusIndicator" class="status-indicator status-light" title="Workout Active"></div>
+        <div class="indicator-group">
+            <span class="indicator-label">Laser:</span>
+            <div id="laserStatusIndicator" class="status-indicator status-light" title="Laser Status"></div>
+        </div>
+        <div class="indicator-group">
+            <span class="indicator-label">Workout: Manual</span>
+            <div id="manualMovementIndicator" class="status-indicator status-light" title="Manual Movement Active"></div>
+        </div>
+        <div class="indicator-group">
+            <span class="indicator-label">Workout: Scheduled</span>
+            <div id="scheduledWorkoutIndicator" class="status-indicator status-light" title="Scheduled Workout Active"></div>
+        </div>
     </div>
 
     <div class="container">

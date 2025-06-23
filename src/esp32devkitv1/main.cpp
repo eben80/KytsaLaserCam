@@ -1572,8 +1572,6 @@ void loop() {
     data["relay_active"] = relayActive; // relayActive is updated by RELAY_ON/OFF commands
     data["random_motion_active"] = randomMotionActive;
     data["is_scheduled_movement_active"] = isScheduledMovementActive;
-    bool movement_active_status = (isScheduledMovementActive && !scheduledMovementOverridden) || randomMotionActive;
-    data["movement_active"] = movement_active_status; // New field
     data["esp32cam_connected"] = esp32CamConnected;
     data["esp32cam_streaming"] = streaming;
     data["cam_led_active"] = camLedActive; // Include CAM LED state

@@ -99,7 +99,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Status Indicator Elements
     const wifiStrengthIndicatorEl = document.getElementById('wifiStrengthIndicator');
     const laserStatusIndicatorEl = document.getElementById('laserStatusIndicator');
-    const workoutStatusIndicatorEl = document.getElementById('workoutStatusIndicator');
+    // const workoutStatusIndicatorEl = document.getElementById('workoutStatusIndicator'); // Removed
+    const manualMovementIndicatorEl = document.getElementById('manualMovementIndicator');
+    const scheduledWorkoutIndicatorEl = document.getElementById('scheduledWorkoutIndicator');
 
 
     /** @type {Array<HTMLElement|null>} Array of all major control elements, used for batch enabling/disabling. */
@@ -1225,75 +1227,73 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         if (laserStatusIndicatorEl) {
-            laserStatusIndicatorEl.className = 'status-indicator status-light'; // Reset to default
+            laserStatusIndicatorEl.className = 'status-indicator status-light'; // Reset to default (Grey)
         }
-        if (workoutStatusIndicatorEl) {
-            workoutStatusIndicatorEl.className = 'status-indicator status-light'; // Reset to default
+        if (manualMovementIndicatorEl) {
+            manualMovementIndicatorEl.className = 'status-indicator status-light'; // Reset to default (Grey)
+        }
+        if (scheduledWorkoutIndicatorEl) {
+            scheduledWorkoutIndicatorEl.className = 'status-indicator status-light'; // Reset to default (Grey)
         }
     }
 
     /**
      * Updates the graphical status indicators based on the received data.
      * @param {object} data - The status data object from the ESP32.
-     *                        Expected keys: wifi_rssi, laser_active, movement_active.
+     *                        Expected keys: wifi_rssi, laser_active, random_motion_active, is_scheduled_movement_active.
      */
     function updateStatusIndicators(data = {}) {
-        // WiFi Strength Indicator
+        // WiFi Strength Indicator (logic remains the same)
         if (wifiStrengthIndicatorEl && data.wifi_rssi !== undefined) {
             const rssi = parseInt(data.wifi_rssi);
             const bars = wifiStrengthIndicatorEl.querySelectorAll('.wifi-bar');
             bars.forEach(bar => bar.className = 'wifi-bar'); // Reset bars
 
-            if (rssi === 0 || rssi < -90) { // Typically 0 means not connected or error, very low RSSI is also bad
-                // 0 bars (all grey)
-            } else if (rssi >= -55) { // Excellent
-                bars.forEach(bar => bar.classList.add('excellent')); // Or use 'active' for a single color
-            } else if (rssi >= -65) { // Good
-                bars[0].classList.add('good');
-                bars[1].classList.add('good');
-                bars[2].classList.add('good');
-                bars[3].classList.add('good'); // All 4 bars for good too, or adjust as preferred
-            } else if (rssi >= -75) { // Fair
-                bars[0].classList.add('fair');
-                bars[1].classList.add('fair');
-                bars[2].classList.add('fair');
-            } else { // Weak (rssi < -75)
-                bars[0].classList.add('weak');
-                bars[1].classList.add('weak');
-            }
-             // Simplified logic: just make a number of bars active
             let numActiveBars = 0;
             if (rssi >= -55) numActiveBars = 4;
-            else if (rssi >= -67) numActiveBars = 3; // Adjusted thresholds
-            else if (rssi >= -80) numActiveBars = 2; // Adjusted thresholds
-            else if (rssi < -80 && rssi !== 0 ) numActiveBars = 1; // if not 0 (error) but very weak
+            else if (rssi >= -67) numActiveBars = 3;
+            else if (rssi >= -80) numActiveBars = 2;
+            else if (rssi < -80 && rssi !== 0) numActiveBars = 1;
 
             for (let i = 0; i < bars.length; i++) {
                 if (i < numActiveBars) {
-                    bars[i].classList.add('active'); // Use a single 'active' class for simplicity with CSS
+                    bars[i].classList.add('active');
                 } else {
                     bars[i].classList.remove('active');
                 }
             }
         }
 
-        // Laser Status Indicator
+        // Laser Status Indicator (Red for ON, Grey for OFF)
         if (laserStatusIndicatorEl && data.laser_active !== undefined) {
             if (data.laser_active) {
-                laserStatusIndicatorEl.classList.add('active');
-                laserStatusIndicatorEl.classList.remove('error');
+                laserStatusIndicatorEl.classList.add('laser-on'); // Red
+                laserStatusIndicatorEl.classList.remove('active'); // Ensure no green
             } else {
+                laserStatusIndicatorEl.classList.remove('laser-on'); // Grey
                 laserStatusIndicatorEl.classList.remove('active');
-                laserStatusIndicatorEl.classList.add('error'); // Using 'error' class for OFF state (red)
             }
         }
 
-        // Workout Status Indicator
-        if (workoutStatusIndicatorEl && data.movement_active !== undefined) {
-            if (data.movement_active) {
-                workoutStatusIndicatorEl.classList.add('active');
+        // Manual Movement Indicator (Green for ACTIVE, Grey for INACTIVE)
+        if (manualMovementIndicatorEl && data.random_motion_active !== undefined) {
+            if (data.random_motion_active) {
+                manualMovementIndicatorEl.classList.add('active'); // Green
+                manualMovementIndicatorEl.classList.remove('laser-on'); // Ensure no red
             } else {
-                workoutStatusIndicatorEl.classList.remove('active');
+                manualMovementIndicatorEl.classList.remove('active'); // Grey
+                manualMovementIndicatorEl.classList.remove('laser-on');
+            }
+        }
+
+        // Scheduled Workout Indicator (Green for ACTIVE, Grey for INACTIVE)
+        if (scheduledWorkoutIndicatorEl && data.is_scheduled_movement_active !== undefined) {
+            if (data.is_scheduled_movement_active) {
+                scheduledWorkoutIndicatorEl.classList.add('active'); // Green
+                scheduledWorkoutIndicatorEl.classList.remove('laser-on'); // Ensure no red
+            } else {
+                scheduledWorkoutIndicatorEl.classList.remove('active'); // Grey
+                scheduledWorkoutIndicatorEl.classList.remove('laser-on');
             }
         }
     }

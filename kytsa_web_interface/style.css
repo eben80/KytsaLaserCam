@@ -164,12 +164,24 @@ select { padding: 8px; margin-bottom: 10px; min-width: 150px; }
     transition: background-color 0.3s ease;
 }
 
-.status-light.active {
-    background-color: #28a745; /* Green for active */
+.status-light.active { /* Green for active (used by workout indicators) */
+    background-color: #28a745;
     border-color: #1e7e34;
 }
 
-.status-light.error {
-    background-color: #dc3545; /* Red for error/off */
+.status-light.laser-on { /* Red for laser ON */
+    background-color: #dc3545;
     border-color: #c82333;
+}
+
+/* Styling for the new indicator groups (label + light) */
+.indicator-group {
+    display: flex;
+    align-items: center;
+    gap: 5px; /* Space between label and light */
+}
+
+.indicator-label {
+    font-size: 0.9em;
+    color: #555;
 }
