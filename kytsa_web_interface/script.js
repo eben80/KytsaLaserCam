@@ -96,6 +96,12 @@ document.addEventListener('DOMContentLoaded', () => {
     /** @type {HTMLSelectElement | null} Dropdown for selecting the NTP update interval. */
     const ntpIntervalSelectEl = document.getElementById('ntpIntervalSelect');
 
+    // Status Indicator Elements
+    const wifiStrengthIndicatorEl = document.getElementById('wifiStrengthIndicator');
+    const laserStatusIndicatorEl = document.getElementById('laserStatusIndicator');
+    const workoutStatusIndicatorEl = document.getElementById('workoutStatusIndicator');
+
+
     /** @type {Array<HTMLElement|null>} Array of all major control elements, used for batch enabling/disabling. */
     const allControls = [
         servoXMinRangeEl, servoXMaxRangeEl, servoXMinValueEl, servoXMaxValueEl,
@@ -245,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (message.deviceId === selectedDeviceId) {
                         updateDeviceStatusDisplay(message.data);
                         updateUIToggleStates(message.data);
+                        updateStatusIndicators(message.data); // Update new status indicators
 
                         // Update CAM states from statusUpdate
                         if (message.data.esp32cam_streaming !== undefined) {
@@ -797,6 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize
     setControlsDisabled(true);
     updateUIToggleStates({}); // Initialize button texts
+    initializeStatusIndicators(); // Initialize indicators to default state
 
 
     /**
@@ -1205,4 +1213,88 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     connectWebSocket(); // Start WebSocket connection on page load
+
+    /**
+     * Initializes the status indicators to their default (inactive) state.
+     */
+    function initializeStatusIndicators() {
+        if (wifiStrengthIndicatorEl) {
+            const bars = wifiStrengthIndicatorEl.querySelectorAll('.wifi-bar');
+            bars.forEach(bar => {
+                bar.className = 'wifi-bar'; // Reset to default class
+            });
+        }
+        if (laserStatusIndicatorEl) {
+            laserStatusIndicatorEl.className = 'status-indicator status-light'; // Reset to default
+        }
+        if (workoutStatusIndicatorEl) {
+            workoutStatusIndicatorEl.className = 'status-indicator status-light'; // Reset to default
+        }
+    }
+
+    /**
+     * Updates the graphical status indicators based on the received data.
+     * @param {object} data - The status data object from the ESP32.
+     *                        Expected keys: wifi_rssi, laser_active, movement_active.
+     */
+    function updateStatusIndicators(data = {}) {
+        // WiFi Strength Indicator
+        if (wifiStrengthIndicatorEl && data.wifi_rssi !== undefined) {
+            const rssi = parseInt(data.wifi_rssi);
+            const bars = wifiStrengthIndicatorEl.querySelectorAll('.wifi-bar');
+            bars.forEach(bar => bar.className = 'wifi-bar'); // Reset bars
+
+            if (rssi === 0 || rssi < -90) { // Typically 0 means not connected or error, very low RSSI is also bad
+                // 0 bars (all grey)
+            } else if (rssi >= -55) { // Excellent
+                bars.forEach(bar => bar.classList.add('excellent')); // Or use 'active' for a single color
+            } else if (rssi >= -65) { // Good
+                bars[0].classList.add('good');
+                bars[1].classList.add('good');
+                bars[2].classList.add('good');
+                bars[3].classList.add('good'); // All 4 bars for good too, or adjust as preferred
+            } else if (rssi >= -75) { // Fair
+                bars[0].classList.add('fair');
+                bars[1].classList.add('fair');
+                bars[2].classList.add('fair');
+            } else { // Weak (rssi < -75)
+                bars[0].classList.add('weak');
+                bars[1].classList.add('weak');
+            }
+             // Simplified logic: just make a number of bars active
+            let numActiveBars = 0;
+            if (rssi >= -55) numActiveBars = 4;
+            else if (rssi >= -67) numActiveBars = 3; // Adjusted thresholds
+            else if (rssi >= -80) numActiveBars = 2; // Adjusted thresholds
+            else if (rssi < -80 && rssi !== 0 ) numActiveBars = 1; // if not 0 (error) but very weak
+
+            for (let i = 0; i < bars.length; i++) {
+                if (i < numActiveBars) {
+                    bars[i].classList.add('active'); // Use a single 'active' class for simplicity with CSS
+                } else {
+                    bars[i].classList.remove('active');
+                }
+            }
+        }
+
+        // Laser Status Indicator
+        if (laserStatusIndicatorEl && data.laser_active !== undefined) {
+            if (data.laser_active) {
+                laserStatusIndicatorEl.classList.add('active');
+                laserStatusIndicatorEl.classList.remove('error');
+            } else {
+                laserStatusIndicatorEl.classList.remove('active');
+                laserStatusIndicatorEl.classList.add('error'); // Using 'error' class for OFF state (red)
+            }
+        }
+
+        // Workout Status Indicator
+        if (workoutStatusIndicatorEl && data.movement_active !== undefined) {
+            if (data.movement_active) {
+                workoutStatusIndicatorEl.classList.add('active');
+            } else {
+                workoutStatusIndicatorEl.classList.remove('active');
+            }
+        }
+    }
 });
