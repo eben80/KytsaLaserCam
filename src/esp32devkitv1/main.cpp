@@ -1447,25 +1447,34 @@ void loop() {
   String scheduledStartTime = ""; // Local variables to store the times
   String scheduledStopTime = "";
 
-  if (timeClient.isTimeSet()) {
-    String fullTime = getFormattedTime(); // This is HH:MM:SS
-    String currentTimeForLogic = fullTime.substring(0, 5); // Should be HH:MM
+  // Use local time for schedule checking
+  time_t now_epoch;
+  time(&now_epoch); // Get current epoch time
 
-    // Ensure NTP debug log is commented or removed
-    // Serial.printf("[DEBUG] Full NTP time: %s, Truncated for logic: %s\n", fullTime.c_str(), currentTimeForLogic.c_str());
+  if (now_epoch < 1609459200L) { // Check if time is plausible (e.g., past Jan 1, 2021 UTC)
+    // Serial.println("[LOOP] System time not yet synchronized or valid for schedule check.");
+  } else {
+    struct tm timeinfo_local;
+    localtime_r(&now_epoch, &timeinfo_local); // Convert to local time structure
+
+    char localTimeStr[6]; // HH:MM + null terminator
+    strftime(localTimeStr, sizeof(localTimeStr), "%H:%M", &timeinfo_local);
+    String currentTimeForLogic = String(localTimeStr);
+
+    // Serial.printf("[DEBUG] Local time for schedule logic: %s\n", currentTimeForLogic.c_str());
 
     int currentMinutes = timeToMinutes(currentTimeForLogic);
 
-    if (currentMinutes == -1) { // timeToMinutes might return -1 if time is not set or format is wrong
-        Serial.println("Cannot check schedule, current time is invalid.");
+    if (currentMinutes == -1) { // timeToMinutes might return -1 if format is wrong (should not happen with strftime)
+        Serial.println("Cannot check schedule, current local time conversion failed.");
     } else {
         for (int i = 0; i < numTimeSlots; i++) {
-            // Explicitly skip if timer slot data is invalid (should be ensured by loading logic too)
+            // Explicitly skip if timer slot data is invalid
             if (timeSlots[i].startTimeMinutes == -1 || timeSlots[i].stopTimeMinutes == -1) {
                 continue;
             }
 
-            // Check if current time falls within this time slot
+            // Check if current local time falls within this time slot
             if (timeSlots[i].startTimeMinutes < timeSlots[i].stopTimeMinutes) { // Normal case (e.g., 10:00 - 12:00)
                 if (currentMinutes >= timeSlots[i].startTimeMinutes && currentMinutes < timeSlots[i].stopTimeMinutes) {
                     shouldMoveRandomlyThisCycle = true;
