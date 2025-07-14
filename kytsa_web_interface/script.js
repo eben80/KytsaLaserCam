@@ -357,11 +357,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // Store firmware version
                         if (message.config.firmware_version !== undefined) {
-                             if(deviceStates[selectedDeviceId]) {
-                                deviceStates[selectedDeviceId].firmware_version = message.config.firmware_version;
+                            // Ensure the state object for the device exists
+                            if (!deviceStates[selectedDeviceId]) {
+                                deviceStates[selectedDeviceId] = {};
                             }
+                            deviceStates[selectedDeviceId].firmware_version = message.config.firmware_version;
+
                             if (updateStatusEl) {
-                                // Update status display immediately if it's showing default text
+                                // Update status display immediately
                                 updateStatusEl.textContent = `Current: v${message.config.firmware_version} | Available: v?`;
                             }
                         }
