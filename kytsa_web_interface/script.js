@@ -355,18 +355,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             timezoneSelectEl.value = message.config.timezone_posix;
                         }
 
-                        // Store firmware version
+                        // Store firmware version and update UI
                         if (message.config.firmware_version !== undefined) {
-                            // Ensure the state object for the device exists
                             if (!deviceStates[selectedDeviceId]) {
                                 deviceStates[selectedDeviceId] = {};
                             }
                             deviceStates[selectedDeviceId].firmware_version = message.config.firmware_version;
-
-                            if (updateStatusEl) {
-                                // Update status display immediately
-                                updateStatusEl.textContent = `Current: v${message.config.firmware_version} | Available: v?`;
-                            }
+                            updateFirmwareStatusUI(message.config.firmware_version, '?'); // Update UI with current version
                         }
                         // Old integer offset handling removed/commented if any:
                         // if (message.config.timezone !== undefined && timezoneSelectEl) {
@@ -550,6 +545,24 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateUIToggleStates(stateData = {}) { // Default to empty object if no state
         // Laser and Relay buttons are removed, so their logic is gone.
         if (randomMotionToggleBtn) randomMotionToggleBtn.textContent = `Random Motion (${stateData.random_motion_active ? "ON" : "OFF"})`;
+    }
+
+    /**
+     * Updates the firmware status UI section.
+     * @param {number | string} deviceVersion - The current version on the device.
+     * @param {number | string | null} serverVersion - The latest version on the server. Can be null or '?' if unknown.
+     */
+    function updateFirmwareStatusUI(deviceVersion, serverVersion = null) {
+        if (!updateStatusEl) return;
+
+        let serverVersionText = (serverVersion === null || serverVersion === '?') ? 'v?' : `v${serverVersion}`;
+        updateStatusEl.textContent = `Current: v${deviceVersion} | Available: ${serverVersionText}`;
+
+        if (serverVersion !== null && serverVersion > deviceVersion) {
+            if (performUpdateBtn) performUpdateBtn.disabled = false;
+        } else {
+            if (performUpdateBtn) performUpdateBtn.disabled = true;
+        }
     }
 
     /**
@@ -882,22 +895,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Get device version from its state (assuming it's sent in systemConfig)
+            // Get device version from its state
             const deviceState = deviceStates[selectedDeviceId] || {};
-            const deviceVersion = deviceState.firmware_version || -1;
+            const deviceVersion = deviceState.firmware_version;
 
-            if (deviceVersion === -1) {
-                 if (updateStatusEl) updateStatusEl.textContent = "Could not determine device version. Select device again.";
+            if (!deviceVersion) {
+                 if (updateStatusEl) updateStatusEl.textContent = "Could not determine device version. It may not have reported yet.";
                  return;
             }
 
-            if (updateStatusEl) updateStatusEl.textContent = `Current: v${deviceVersion} | Available: v${serverVersion}`;
-
-            if (serverVersion > deviceVersion) {
-                if (performUpdateBtn) performUpdateBtn.disabled = false;
-            } else {
-                if (performUpdateBtn) performUpdateBtn.disabled = true;
-            }
+            // Update the UI with both versions
+            updateFirmwareStatusUI(deviceVersion, serverVersion);
         });
     }
 
