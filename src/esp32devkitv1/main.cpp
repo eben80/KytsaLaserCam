@@ -18,6 +18,9 @@
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <time.h> // For time_t, tm, time(), localtime_r(), strftime()
+#include <HTTPUpdate.h>
+#include <HTTPClient.h>
+#include "certificates.h" // For root_ca_cert
 
 /**
  * @file main.cpp
@@ -221,6 +224,14 @@ unsigned long webSocketLastReconnectAttempt = 0;
 const unsigned long webSocketReconnectInterval = 5000;
 /** @brief Unique identifier for this ESP32 device, derived from its MAC address. Sent during pairing. */
 String deviceId = "";
+// --- Firmware & OTA Update ---
+/** @brief Current firmware version. Increment this for each new release. */
+const int FIRMWARE_VERSION = 1;
+/** @brief URL to the firmware binary on the server. */
+const char* firmware_binary_url = "https://ebski.co/firmware/firmware.bin";
+/** @brief URL to the version file on the server. */
+const char* firmware_version_url = "https://ebski.co/firmware/firmware.version";
+
 // --- WebSocket Server Details ---
 /** @brief Hostname or IP address of the WebSocket server. */
 const char* wsHost = "ebski.co";
@@ -443,6 +454,17 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
                         deleteTimeSlot(timerIndex);
                         sendSystemConfig();
+                    else if (strcmp(command, "http_ota_update") == 0) {
+                        Serial.println("[WSc] Received 'http_ota_update' command. Creating update task...");
+                        recordDisplayActivity();
+                        xTaskCreate(
+                            httpUpdateTask,         /* Task function. */
+                            "HTTPUpdateTask",       /* String with name of task. */
+                            8192,                   /* Stack size in bytes. */
+                            NULL,                   /* Parameter passed as input of the task */
+                            1,                      /* Priority of the task. */
+                            NULL);                  /* Task handle. */
+                    }
                     } else if (strcmp(command, "setPreference") == 0) {
                         recordDisplayActivity(); // Any preference change implies user interaction
                         const char* key = doc["key"];
@@ -993,6 +1015,7 @@ void sendSystemConfig() {
     // config_obj["timezone"] = timeZoneOffset; // Old integer offset - REMOVED
     config_obj["timezone_posix"] = timeZonePosixString; // Send POSIX string
     config_obj["ntp_interval"] = ntpUpdateInterval; // Already a long (ms)
+    config_obj["firmware_version"] = FIRMWARE_VERSION; // Add firmware version
     // config_obj["cam_led_active"] = camLedActive;
 
     JsonArray timersArray = config_obj.createNestedArray("timers");
@@ -1253,6 +1276,70 @@ void moveServosRandomlyNonBlocking() {
 
     }
 }
+
+/**
+ * @brief FreeRTOS task to run the HTTP OTA update process in the background.
+ * @param pvParameters Task parameters (not used).
+ */
+void httpUpdateTask(void *pvParameters) {
+    performHttpUpdate();
+    vTaskDelete(NULL); // Delete the task when update process is complete or fails
+}
+
+/**
+ * @brief Performs an HTTP-based OTA update.
+ * Checks a version file on the server, and if the server version is newer
+ * than the current FIRMWARE_VERSION, it downloads and applies the new binary.
+ */
+void performHttpUpdate() {
+    Serial.println("Starting HTTP OTA Update check...");
+
+    WiFiClientSecure client;
+    client.setCACert(root_ca_cert);
+
+    HTTPClient http;
+    http.begin(client, firmware_version_url);
+
+    int httpCode = http.GET();
+    if (httpCode > 0) {
+        if (httpCode == HTTP_CODE_OK) {
+            String payload = http.getString();
+            int serverVersion = payload.toInt();
+            Serial.printf("Server firmware version: %d\n", serverVersion);
+            Serial.printf("Current firmware version: %d\n", FIRMWARE_VERSION);
+
+            if (serverVersion > FIRMWARE_VERSION) {
+                Serial.println("New firmware available. Starting update...");
+                http.end(); // End the version check connection
+
+                // httpUpdate.setLedPin(LED_BUILTIN, HIGH); // Optional: Use a status LED
+                t_httpUpdate_return ret = httpUpdate.update(client, firmware_binary_url, String(FIRMWARE_VERSION));
+
+                switch (ret) {
+                    case HTTP_UPDATE_FAILED:
+                        Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+                        // TODO: Send WebSocket message on failure
+                        break;
+                    case HTTP_UPDATE_NO_UPDATES:
+                        Serial.println("HTTP_UPDATE_NO_UPDATES");
+                        break;
+                    case HTTP_UPDATE_OK:
+                        Serial.println("HTTP_UPDATE_OK"); // This will not be seen as the device reboots
+                        break;
+                }
+            } else {
+                Serial.println("Firmware is up to date.");
+                // TODO: Send WebSocket message indicating up-to-date
+            }
+        } else {
+            Serial.printf("Version check failed, server returned http code: %d\n", httpCode);
+        }
+    } else {
+        Serial.printf("Version check failed, http.GET() error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    http.end();
+}
+
 
 // Function to display settings on OLED
 void displaySettings() {
