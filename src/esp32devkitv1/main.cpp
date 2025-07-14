@@ -283,6 +283,7 @@ void addTimeSlot(String startTimeStr, String stopTimeStr); // Ensure it's declar
 void deleteTimeSlot(int indexToDelete); // Ensure it's declared
 void updateDisplay(); // Forward declaration for OLED update
 void recordDisplayActivity(); // Forward declaration for OLED inactivity feature
+void httpUpdateTask(void *pvParameters); // Forward declaration for OTA update task
 
 
 /**
@@ -454,6 +455,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                         Serial.printf("Received deleteTimer: index=%d\n", timerIndex);
                         deleteTimeSlot(timerIndex);
                         sendSystemConfig();
+                    }
                     else if (strcmp(command, "http_ota_update") == 0) {
                         Serial.println("[WSc] Received 'http_ota_update' command. Creating update task...");
                         recordDisplayActivity();
@@ -465,7 +467,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                             1,                      /* Priority of the task. */
                             NULL);                  /* Task handle. */
                     }
-                    } else if (strcmp(command, "setPreference") == 0) {
+                    else if (strcmp(command, "setPreference") == 0) {
                         recordDisplayActivity(); // Any preference change implies user interaction
                         const char* key = doc["key"];
                         if (key) {
