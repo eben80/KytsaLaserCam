@@ -33,6 +33,11 @@ server {
         try_files $uri $uri/ /kytsa/index.html;
     }
 
+    location /firmware/ {
+        alias /var/www/ebski.co/firmware/;
+        autoindex off;
+    }
+
     location / {
         try_files $uri $uri/ /index.html /index.php?$args;
     }
@@ -117,6 +122,11 @@ server {
         }
 
         try_files $uri $uri/ /kytsa/index.html;
+    }
+
+    location /firmware/ {
+        alias /var/www/ebski.co/firmware/;
+        autoindex off;
     }
 
     location / {
