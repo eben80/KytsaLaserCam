@@ -284,6 +284,7 @@ void deleteTimeSlot(int indexToDelete); // Ensure it's declared
 void updateDisplay(); // Forward declaration for OLED update
 void recordDisplayActivity(); // Forward declaration for OLED inactivity feature
 void httpUpdateTask(void *pvParameters); // Forward declaration for OTA update task
+void performHttpUpdate(); // Forward declaration for the OTA update logic
 
 
 /**
