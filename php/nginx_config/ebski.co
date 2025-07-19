@@ -23,17 +23,16 @@ server {
     location ^~ /kytsa/ {
         alias /var/www/ebski.co/kytsa_web_interface/;
         index index.html;
-
         location ~ \.php$ {
             include snippets/fastcgi-php.conf;
             fastcgi_param SCRIPT_FILENAME $request_filename;
             fastcgi_pass unix:/run/php/php8.3-fpm.sock;
         }
-
         try_files $uri $uri/ /kytsa/index.html;
     }
 
     location /firmware/ {
+	add_header 'Access-Control-Allow-Origin' 'https://www.ebski.co';
         alias /var/www/ebski.co/firmware/;
         autoindex off;
     }
@@ -120,11 +119,11 @@ server {
             fastcgi_param SCRIPT_FILENAME $request_filename;
             fastcgi_pass unix:/run/php/php8.3-fpm.sock;
         }
-
         try_files $uri $uri/ /kytsa/index.html;
     }
 
     location /firmware/ {
+	add_header 'Access-Control-Allow-Origin' 'https://www.ebski.co';
         alias /var/www/ebski.co/firmware/;
         autoindex off;
     }

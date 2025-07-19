@@ -226,7 +226,7 @@ const unsigned long webSocketReconnectInterval = 5000;
 String deviceId = "";
 // --- Firmware & OTA Update ---
 /** @brief Current firmware version. Increment this for each new release. */
-const int FIRMWARE_VERSION = 1;
+const int FIRMWARE_VERSION = 2;
 /** @brief URL to the firmware binary on the server. */
 const char* firmware_binary_url = "https://ebski.co/firmware/firmware.bin";
 /** @brief URL to the version file on the server. */
