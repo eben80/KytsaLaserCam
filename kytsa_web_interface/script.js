@@ -98,6 +98,11 @@ document.addEventListener('DOMContentLoaded', () => {
     /** @type {HTMLSelectElement | null} Dropdown for selecting the NTP update interval. */
     const ntpIntervalSelectEl = document.getElementById('ntpIntervalSelect');
 
+    // Firmware Update Elements
+    const checkForUpdateBtn = document.getElementById('checkForUpdateBtn');
+    const performUpdateBtn = document.getElementById('performUpdateBtn');
+    const updateStatusEl = document.getElementById('updateStatus');
+
     // Status Indicator Elements
     const wifiStrengthIndicatorEl = document.getElementById('wifiStrengthIndicator');
     const laserStatusIndicatorEl = document.getElementById('laserStatusIndicator');
@@ -113,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
         velMinRangeEl, velMaxRangeEl, velMinValueEl, velMaxValueEl, // Velocity controls
         timezoneSelectEl, ntpIntervalSelectEl, // New selectors
         timerStartTimeEl, timerEndTimeEl, addTimerBtn,
-        randomMotionToggleBtn, toggleCamStreamBtn, toggleCamLedBtn
+        randomMotionToggleBtn, toggleCamStreamBtn, toggleCamLedBtn,
+        checkForUpdateBtn, performUpdateBtn // Firmware update buttons
     ];
 
     const RANGE_MIN_DIFFERENCE = 10; // Minimum difference between min and max thumbs of a range slider
@@ -348,6 +354,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (message.config.timezone_posix !== undefined && timezoneSelectEl) { // Expect 'timezone_posix' (string)
                             timezoneSelectEl.value = message.config.timezone_posix;
                         }
+
+                        // Store firmware version and update UI
+                        if (message.config.firmware_version !== undefined) {
+                            if (!deviceStates[selectedDeviceId]) {
+                                deviceStates[selectedDeviceId] = {};
+                            }
+                            deviceStates[selectedDeviceId].firmware_version = message.config.firmware_version;
+                            updateFirmwareStatusUI(message.config.firmware_version, '?'); // Update UI with current version
+                        }
                         // Old integer offset handling removed/commented if any:
                         // if (message.config.timezone !== undefined && timezoneSelectEl) {
                         //     timezoneSelectEl.value = message.config.timezone;
@@ -396,6 +411,11 @@ document.addEventListener('DOMContentLoaded', () => {
                      if (message.deviceId === selectedDeviceId && message.timers) {
                         console.log('[DEBUG] timerList or scheduleUpdate received. Timers:', message.timers);
                         displayTimers(message.timers || []); // Pass empty array if null/undefined
+                    }
+                    break;
+                case 'ota_status':
+                    if (updateStatusEl && message.deviceId === selectedDeviceId) {
+                        updateStatusEl.textContent = `Status: ${message.status}`;
                     }
                     break;
                 case 'error':
@@ -525,6 +545,24 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateUIToggleStates(stateData = {}) { // Default to empty object if no state
         // Laser and Relay buttons are removed, so their logic is gone.
         if (randomMotionToggleBtn) randomMotionToggleBtn.textContent = `Random Motion (${stateData.random_motion_active ? "ON" : "OFF"})`;
+    }
+
+    /**
+     * Updates the firmware status UI section.
+     * @param {number | string} deviceVersion - The current version on the device.
+     * @param {number | string | null} serverVersion - The latest version on the server. Can be null or '?' if unknown.
+     */
+    function updateFirmwareStatusUI(deviceVersion, serverVersion = null) {
+        if (!updateStatusEl) return;
+
+        let serverVersionText = (serverVersion === null || serverVersion === '?') ? 'v?' : `v${serverVersion}`;
+        updateStatusEl.textContent = `Current: v${deviceVersion} | Available: ${serverVersionText}`;
+
+        if (serverVersion !== null && serverVersion > deviceVersion) {
+            if (performUpdateBtn) performUpdateBtn.disabled = false;
+        } else {
+            if (performUpdateBtn) performUpdateBtn.disabled = true;
+        }
     }
 
     /**
@@ -831,6 +869,55 @@ document.addEventListener('DOMContentLoaded', () => {
             sendCommand({ command: 'RANDOM_MOTION_TOGGLE' });
             if (deviceStates[selectedDeviceId]) deviceStates[selectedDeviceId].random_motion_active = newRandomMotionState;
             updateUIToggleStates({ random_motion_active: newRandomMotionState });
+        });
+    }
+
+    // Firmware Update Logic
+    if (checkForUpdateBtn) {
+        checkForUpdateBtn.addEventListener('click', async () => {
+            if (!selectedDeviceId) {
+                alert("Please select a device first.");
+                return;
+            }
+            if (updateStatusEl) updateStatusEl.textContent = "Checking for updates...";
+
+            // Fetch server version
+            let serverVersion = -1;
+            try {
+                const response = await fetch('https://ebski.co/firmware/firmware.version');
+                if (!response.ok) {
+                    throw new Error(`Server returned status: ${response.status}`);
+                }
+                const versionText = await response.text();
+                serverVersion = parseInt(versionText.trim());
+            } catch (error) {
+                if (updateStatusEl) updateStatusEl.textContent = `Error fetching server version: ${error.message}`;
+                return;
+            }
+
+            // Get device version from its state
+            const deviceState = deviceStates[selectedDeviceId] || {};
+            const deviceVersion = deviceState.firmware_version;
+
+            if (!deviceVersion) {
+                 if (updateStatusEl) updateStatusEl.textContent = "Could not determine device version. It may not have reported yet.";
+                 return;
+            }
+
+            // Update the UI with both versions
+            updateFirmwareStatusUI(deviceVersion, serverVersion);
+        });
+    }
+
+    if (performUpdateBtn) {
+        performUpdateBtn.addEventListener('click', () => {
+            if (!selectedDeviceId) {
+                alert("Please select a device first.");
+                return;
+            }
+            if (updateStatusEl) updateStatusEl.textContent = "Update command sent. Device will now update and reboot...";
+            sendCommand({ command: 'http_ota_update' });
+            performUpdateBtn.disabled = true; // Disable after clicking
         });
     }
 
