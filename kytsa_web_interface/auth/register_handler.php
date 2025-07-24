@@ -1,5 +1,5 @@
 <?php
-require_once '../../php/php/db/database.php';
+require_once __DIR__ . '/../../php_backend/db/database.php';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $database = new Database();

@@ -4,7 +4,7 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: auth/login.php");
     exit();
 }
-require_once '../php/php/db/database.php';
+require_once __DIR__ . '/../php_backend/db/database.php';
 
 $database = new Database();
 $db = $database->getConnection();
