@@ -18,8 +18,8 @@
             <?php endif; ?>
             <form action="login_handler.php" method="post">
                 <div class="control-group">
-                    <label for="email">Email</label>
-                    <input type="email" name="email" id="email" required>
+                    <label for="email">Email or Username</label>
+                    <input type="text" name="email" id="email" required placeholder="Email or Admin Username">
                 </div>
                 <div class="control-group">
                     <label for="password">Password</label>
