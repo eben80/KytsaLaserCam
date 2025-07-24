@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (toggleCamStreamBtn) toggleCamStreamBtn.textContent = isStreamActive ? 'Stop CAM Stream' : 'Start CAM Stream';
                             // Update stream image source based on actual streaming state
                             if (isStreamActive && streamImgEl && streamPlaceholderTextEl) {
-                                streamImgEl.src = `stream.php?device_id=${selectedDeviceId}&t=${new Date().getTime()}`;
+                                streamImgEl.src = `/stream?device_id=${selectedDeviceId}&t=${new Date().getTime()}`;
                                 streamImgEl.style.display = 'block';
                                 streamPlaceholderTextEl.style.display = 'none';
                             } else if (streamImgEl && streamPlaceholderTextEl) {
@@ -823,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 sendCommand({ command: 'START_STREAM' });
                 toggleCamStreamBtn.textContent = 'Stop CAM Stream'; // Optimistic
                 if (streamImgEl && streamPlaceholderTextEl) {
-                    streamImgEl.src = `stream.php?device_id=${selectedDeviceId}&t=${new Date().getTime()}`;
+                    streamImgEl.src = `/stream?device_id=${selectedDeviceId}&t=${new Date().getTime()}`;
                     streamImgEl.style.display = 'block';
                     streamPlaceholderTextEl.style.display = 'none';
                 }
