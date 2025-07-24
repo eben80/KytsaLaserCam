@@ -10,7 +10,7 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 // Manually create a session handler
 $sessionHandler = new Handler\PdoSessionHandler(
-    (new MyApp\Database())->getConnection(),
+    (new \MyApp\Database())->getConnection(),
     ['db_table' => 'sessions']
 );
 

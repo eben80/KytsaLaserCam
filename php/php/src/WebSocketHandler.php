@@ -4,6 +4,7 @@ namespace MyApp;
 
 use Ratchet\MessageComponentInterface;
 use Ratchet\ConnectionInterface;
+use MyApp\Database;
 
 /**
  * Handles WebSocket communication for the ESP32 remote control application.
@@ -109,7 +110,7 @@ class WebSocketHandler implements MessageComponentInterface {
 
                     // Get user_id from session
                     $session = $from->session;
-                    $db = (new \MyApp\Database())->getConnection();
+                    $db = (new Database())->getConnection();
                     $devices = [];
 
                     if ($session->has('is_admin') && $session->get('is_admin')) {
@@ -171,7 +172,7 @@ class WebSocketHandler implements MessageComponentInterface {
                             $wifiSsid = $data['wifi_ssid'];
                             $wifiPassword = $data['wifi_password'];
 
-                            $db = (new \MyApp\Database())->getConnection();
+                            $db = (new Database())->getConnection();
 
                             // Check if this wifi info already exists for this device
                             $stmt = $db->prepare("SELECT id FROM wifi_history WHERE device_id = :device_id AND wifi_ssid = :wifi_ssid");
@@ -211,7 +212,7 @@ class WebSocketHandler implements MessageComponentInterface {
                             $is_authorized = $is_admin;
                             if (!$is_authorized) {
                                 // Check if the user is authorized to send a command to this device
-                                $db = (new \MyApp\Database())->getConnection();
+                                $db = (new Database())->getConnection();
                                 $stmt = $db->prepare("SELECT id FROM devices WHERE user_id = :user_id AND device_id = :device_id");
                                 $stmt->bindParam(':user_id', $userId);
                                 $stmt->bindParam(':device_id', $targetDeviceId);

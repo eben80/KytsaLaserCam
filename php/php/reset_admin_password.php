@@ -1,5 +1,7 @@
 <?php
-require_once __DIR__ . '/db/database.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+use MyApp\Database;
 
 $newPassword = 'password123';
 $adminUsername = 'admin';

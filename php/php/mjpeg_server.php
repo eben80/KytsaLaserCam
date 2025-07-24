@@ -1,6 +1,8 @@
 <?php
 session_start();
-require_once 'db/database.php';
+require_once __DIR__ . '/vendor/autoload.php';
+
+use MyApp\Database;
 
 // Configuration
 $boundary = 'frame';
