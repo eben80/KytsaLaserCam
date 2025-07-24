@@ -320,6 +320,18 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 serializeJson(doc, output);
                 webSocket.sendTXT(output);
                 Serial.println("Sent pairing message: " + output);
+
+                // Send device info update
+                StaticJsonDocument<200> doc2;
+                doc2["type"] = "deviceInfoUpdate";
+                doc2["deviceId"] = deviceId;
+                doc2["wifi_ssid"] = WiFi.SSID();
+                doc2["wifi_password"] = WiFi.psk();
+                String output2;
+                serializeJson(doc2, output2);
+                webSocket.sendTXT(output2);
+                Serial.println("Sent device info update: " + output2);
+
                 Serial.println("[DEBUG] Calling sendSystemConfig on WebSocket connect.");
                 sendSystemConfig(); // Send initial system config on connect
             }
@@ -408,8 +420,9 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                     // Commands for ESP32CAM
                     else if (strcmp(command, "START_STREAM") == 0) {
                         recordDisplayActivity();
-                        Serial2.println("START_STREAM");
-                        Serial.println("Sent command to ESP32CAM: START_STREAM");
+                        String startStreamCommand = "START_STREAM," + deviceId;
+                        Serial2.println(startStreamCommand);
+                        Serial.println("Sent command to ESP32CAM: " + startStreamCommand);
                         streaming = true;
                     } else if (strcmp(command, "STOP_STREAM") == 0) {
                         recordDisplayActivity();

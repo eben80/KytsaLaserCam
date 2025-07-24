@@ -23,8 +23,21 @@ if (isset($_GET['action']) && $_GET['action'] == 'unbind' && isset($_GET['device
 }
 
 
-// Get all users and their devices
-$query = "SELECT u.id as user_id, u.email, d.id as device_id, d.device_id as device_name, d.wifi_ssid, d.wifi_password, d.created_at FROM users u LEFT JOIN devices d ON u.id = d.user_id ORDER BY u.email, d.created_at";
+// Get all users and their devices, including wifi history
+$query = "
+    SELECT
+        u.id as user_id,
+        u.email,
+        d.id as device_id,
+        d.device_id as device_name,
+        d.created_at,
+        wh.wifi_ssid,
+        wh.wifi_password,
+        wh.created_at as wifi_used_at
+    FROM users u
+    LEFT JOIN devices d ON u.id = d.user_id
+    LEFT JOIN wifi_history wh ON d.device_id = wh.device_id
+    ORDER BY u.email, d.device_id, wh.created_at DESC";
 $stmt = $db->prepare($query);
 $stmt->execute();
 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -33,7 +46,14 @@ $users = [];
 foreach ($results as $row) {
     $users[$row['email']]['user_id'] = $row['user_id'];
     if ($row['device_id']) {
-        $users[$row['email']]['devices'][] = $row;
+        $users[$row['email']]['devices'][$row['device_name']]['created_at'] = $row['created_at'];
+        if ($row['wifi_ssid']) {
+            $users[$row['email']]['devices'][$row['device_name']]['wifi_history'][] = [
+                'wifi_ssid' => $row['wifi_ssid'],
+                'wifi_password' => $row['wifi_password'],
+                'wifi_used_at' => $row['wifi_used_at']
+            ];
+        }
     }
 }
 
@@ -61,28 +81,31 @@ foreach ($results as $row) {
             <?php foreach ($users as $email => $userData): ?>
                 <h3>User: <?php echo htmlspecialchars($email); ?></h3>
                 <?php if (isset($userData['devices'])): ?>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Device ID</th>
-                                <th>WiFi SSID</th>
-                                <th>WiFi Password</th>
-                                <th>Registered On</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($userData['devices'] as $device): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($device['device_name']); ?></td>
-                                    <td><?php echo htmlspecialchars($device['wifi_ssid']); ?></td>
-                                    <td><?php echo htmlspecialchars($device['wifi_password']); ?></td>
-                                    <td><?php echo htmlspecialchars($device['created_at']); ?></td>
-                                    <td><a href="index.php?action=unbind&device_id=<?php echo $device['device_id']; ?>">Unbind</a></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                    <?php foreach ($userData['devices'] as $deviceName => $deviceData): ?>
+                        <h4>Device: <?php echo htmlspecialchars($deviceName); ?> (Registered on: <?php echo $deviceData['created_at']; ?>) <a href="index.php?action=unbind&device_id=<?php echo $deviceName; ?>">Unbind</a></h4>
+                        <?php if (isset($deviceData['wifi_history'])): ?>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>WiFi SSID</th>
+                                        <th>WiFi Password</th>
+                                        <th>Last Used</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($deviceData['wifi_history'] as $wifi): ?>
+                                        <tr>
+                                            <td><?php echo htmlspecialchars($wifi['wifi_ssid']); ?></td>
+                                            <td><?php echo htmlspecialchars($wifi['wifi_password']); ?></td>
+                                            <td><?php echo htmlspecialchars($wifi['wifi_used_at']); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php else: ?>
+                            <p>No WiFi history for this device.</p>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
                 <?php else: ?>
                     <p>No devices registered for this user.</p>
                 <?php endif; ?>

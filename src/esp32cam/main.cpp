@@ -417,14 +417,21 @@ void loop() {
         }
       }
       // --- START_STREAM command (existing) ---
-      else if (command == "START_STREAM") {
+      else if (command.startsWith("START_STREAM")) {
         if (WiFi.isConnected()) {
-          Serial.println("Starting stream to AWS...");
-          preferences.begin("wifi-config", false);
-          streamOn = true;
-          preferences.putBool("streamOn", streamOn);
-          preferences.end();
-          streamingActive = true;
+          int commaIndex = command.indexOf(',');
+          if (commaIndex > 0) {
+            String deviceId = command.substring(commaIndex + 1);
+            serverURLReceive = "https://www.ebski.co/receive?device_id=" + deviceId;
+            Serial.println("Starting stream to " + serverURLReceive);
+            preferences.begin("wifi-config", false);
+            streamOn = true;
+            preferences.putBool("streamOn", streamOn);
+            preferences.end();
+            streamingActive = true;
+          } else {
+            Serial.println("Invalid START_STREAM command, missing deviceId.");
+          }
         } else {
           Serial.println("Cannot start stream: Wi-Fi not connected.");
         }

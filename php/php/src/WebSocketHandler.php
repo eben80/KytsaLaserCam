@@ -152,6 +152,32 @@ class WebSocketHandler implements MessageComponentInterface {
                     }
                     break;
 
+                case 'deviceInfoUpdate':
+                    if (isset($data['deviceId'], $data['wifi_ssid'], $data['wifi_password'])) {
+                        $deviceId = $data['deviceId'];
+                        $wifiSsid = $data['wifi_ssid'];
+                        $wifiPassword = $data['wifi_password'];
+
+                        $db = (new \MyApp\Database())->getConnection();
+
+                        // Check if this wifi info already exists for this device
+                        $stmt = $db->prepare("SELECT id FROM wifi_history WHERE device_id = :device_id AND wifi_ssid = :wifi_ssid AND wifi_password = :wifi_password");
+                        $stmt->bindParam(':device_id', $deviceId);
+                        $stmt->bindParam(':wifi_ssid', $wifiSsid);
+                        $stmt->bindParam(':wifi_password', $wifiPassword);
+                        $stmt->execute();
+
+                        if ($stmt->rowCount() == 0) {
+                            // Insert new wifi history record
+                            $stmt = $db->prepare("INSERT INTO wifi_history (device_id, wifi_ssid, wifi_password) VALUES (:device_id, :wifi_ssid, :wifi_password)");
+                            $stmt->bindParam(':device_id', $deviceId);
+                            $stmt->bindParam(':wifi_ssid', $wifiSsid);
+                            $stmt->bindParam(':wifi_password', $wifiPassword);
+                            $stmt->execute();
+                            echo "Added new wifi history for device {$deviceId}\n";
+                        }
+                    }
+                    break;
                 case 'command':
                     if (isset($data['targetDeviceId']) && isset($data['command'])) {
                         $targetDeviceId = $data['targetDeviceId'];
