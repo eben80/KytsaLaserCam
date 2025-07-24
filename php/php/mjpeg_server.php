@@ -13,12 +13,7 @@ $redisKeyPrefix = 'stream:';
 
 // Handle POST request to receive a frame
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && strpos($_SERVER['REQUEST_URI'], '/receive') === 0) {
-    if (!isset($_GET['device_id'])) {
-        http_response_code(400);
-        echo "Device ID is missing.";
-        exit();
-    }
-    $deviceId = $_GET['device_id'];
+    $deviceId = $_GET['device_id'] ?? 'D4627C931744'; // Use legacy ID if not provided
     $redisKey = $redisKeyPrefix . $deviceId;
 
     $rawFrameData = file_get_contents('php://input');
