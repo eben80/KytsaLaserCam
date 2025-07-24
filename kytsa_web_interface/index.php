@@ -14,6 +14,12 @@ if (!isset($_SESSION['user_id']) && !isset($_SESSION['admin_id'])) {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <?php if (isset($_SESSION['is_admin']) && $_SESSION['is_admin']): ?>
+        <div style="background-color: #ffdddd; border: 1px solid #ff0000; padding: 5px; text-align: center;">
+            <h2 style="color: #ff0000; margin: 0;">Admin Mode</h2>
+            <a href="admin_device_history.php">View All Device History</a>
+        </div>
+    <?php endif; ?>
     <h1>Kytsa Laser Control</h1>
     <p><a href="devices.php">Manage Devices</a> | <a href="auth/logout.php">Logout</a></p>
 
