@@ -17,6 +17,8 @@ class WebSocketHandler implements MessageComponentInterface {
     protected $esp32Devices;
     /** @var \SplObjectStorage<ConnectionInterface, mixed> A collection of active Web UI client connections. */
     protected $webUIClients;
+    /** @var array<int, int> An associative array mapping connection resource IDs to user IDs. resourceId => userId */
+    protected $userConnections;
 
     /**
      * Constructor. Initializes client storage.
@@ -25,6 +27,7 @@ class WebSocketHandler implements MessageComponentInterface {
         $this->clients = new \SplObjectStorage;
         $this->esp32Devices = [];
         $this->webUIClients = new \SplObjectStorage;
+        $this->userConnections = [];
         echo "WebSocketHandler Instantiated\n";
     }
 
@@ -37,23 +40,6 @@ class WebSocketHandler implements MessageComponentInterface {
     public function onOpen(ConnectionInterface $conn) {
         $this->clients->attach($conn);
         echo "New connection! ({$conn->resourceId})\n";
-
-        // Log HTTP Request Headers
-        if (isset($conn->httpRequest)) {
-            $httpRequest = $conn->httpRequest;
-            echo "Attempting WebSocket handshake. Request Headers for connection {$conn->resourceId}:\n";
-            echo "  Method: " . $httpRequest->getMethod() . "\n";
-            echo "  URI: " . (string)$httpRequest->getUri() . "\n";
-            echo "  Version: " . $httpRequest->getProtocolVersion() . "\n";
-            foreach ($httpRequest->getHeaders() as $name => $values) {
-                echo "  Header: " . $name . ": " . implode(", ", $values) . "\n";
-            }
-            echo "------------------------------------\n";
-        } else {
-            echo "httpRequest property not found on ConnectionInterface for connection {$conn->resourceId}. Cannot log headers.\n";
-        }
-        // The rest of the onOpen logic (e.g., waiting for pairing message) remains.
-        // The decision to classify as ESP32 or WebUI happens in onMessage.
     }
 
     /**
@@ -95,16 +81,24 @@ class WebSocketHandler implements MessageComponentInterface {
                             }
                         }
 
-                        // Now, associate the new connection with the deviceId
-                        $this->esp32Devices[$newResourceId] = $newDeviceId;
+                        // Now, check if the device is registered in the database
+                        $db = (new \MyApp\Database())->getConnection();
+                        $stmt = $db->prepare("SELECT id, user_id FROM devices WHERE device_id = :device_id");
+                        $stmt->bindParam(':device_id', $newDeviceId);
+                        $stmt->execute();
 
-                        // If this connection was previously a webUI client, remove it from there
-                        if ($this->webUIClients->contains($from)) {
-                            $this->webUIClients->detach($from);
+                        if ($stmt->rowCount() > 0) {
+                            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+                            $this->esp32Devices[$newResourceId] = $newDeviceId;
+
+                            // If this connection was previously a webUI client, remove it from there
+                            if ($this->webUIClients->contains($from)) {
+                                $this->webUIClients->detach($from);
+                            }
+                            echo "Device {$newDeviceId} paired with connection {$newResourceId}\n";
+                        } else {
+                            echo "Device {$newDeviceId} is not registered. Ignoring pairing request.\n";
                         }
-
-                        echo "Device {$newDeviceId} paired with connection {$newResourceId}\n";
-                        $this->broadcastToWebUI(['type' => 'deviceConnected', 'deviceId' => $newDeviceId]);
                     }
                     break;
                 case 'webClientInit':
@@ -112,9 +106,26 @@ class WebSocketHandler implements MessageComponentInterface {
                     if (array_key_exists($from->resourceId, $this->esp32Devices)) {
                         unset($this->esp32Devices[$from->resourceId]);
                     }
-                    echo "Web UI client connected: {$from->resourceId}\n";
-                    $connectedDeviceIds = array_values($this->esp32Devices);
-                    $from->send(json_encode(['type' => 'deviceList', 'devices' => $connectedDeviceIds]));
+
+                    // Get user_id from session
+                    $session = $from->session;
+                    if ($session->has('user_id')) {
+                        $userId = $session->get('user_id');
+                        $this->userConnections[$from->resourceId] = $userId;
+                        echo "Web UI client connected: {$from->resourceId} for user {$userId}\n";
+
+                        // Get devices for this user from the database
+                        $db = (new \MyApp\Database())->getConnection();
+                        $stmt = $db->prepare("SELECT device_id FROM devices WHERE user_id = :user_id");
+                        $stmt->bindParam(':user_id', $userId);
+                        $stmt->execute();
+                        $devices = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+
+                        $from->send(json_encode(['type' => 'deviceList', 'devices' => $devices]));
+                    } else {
+                        echo "Web UI client connected: {$from->resourceId} but no user session found.\n";
+                        $from->send(json_encode(['type' => 'deviceList', 'devices' => []]));
+                    }
                     break;
                 case 'statusUpdate':
                     if (isset($this->esp32Devices[$from->resourceId]) && isset($data['data'])) {
@@ -144,33 +155,48 @@ class WebSocketHandler implements MessageComponentInterface {
                 case 'command':
                     if (isset($data['targetDeviceId']) && isset($data['command'])) {
                         $targetDeviceId = $data['targetDeviceId'];
-                        $resourceIdToSend = array_search($targetDeviceId, $this->esp32Devices);
+                        $userId = $this->userConnections[$from->resourceId] ?? null;
 
-                        if ($resourceIdToSend !== false) {
-                            $targetClient = null;
-                            foreach($this->clients as $client) {
-                                if($client->resourceId == $resourceIdToSend) {
-                                    $targetClient = $client;
-                                    break;
+                        if ($userId) {
+                            // Check if the user is authorized to send a command to this device
+                            $db = (new \MyApp\Database())->getConnection();
+                            $stmt = $db->prepare("SELECT id FROM devices WHERE user_id = :user_id AND device_id = :device_id");
+                            $stmt->bindParam(':user_id', $userId);
+                            $stmt->bindParam(':device_id', $targetDeviceId);
+                            $stmt->execute();
+
+                            if ($stmt->rowCount() > 0) {
+                                $resourceIdToSend = array_search($targetDeviceId, $this->esp32Devices);
+
+                                if ($resourceIdToSend !== false) {
+                                    $targetClient = null;
+                                    foreach($this->clients as $client) {
+                                        if($client->resourceId == $resourceIdToSend) {
+                                            $targetClient = $client;
+                                            break;
+                                        }
+                                    }
+                                    if ($targetClient) {
+                                        $messageToEsp32 = $data;
+                                        unset($messageToEsp32['targetDeviceId']);
+                                        $messageJsonToEsp32 = json_encode($messageToEsp32);
+                                        $targetClient->send($messageJsonToEsp32);
+                                        echo "Relayed command to {$targetDeviceId} (conn {$targetClient->resourceId}): {$messageJsonToEsp32}\n";
+                                    } else {
+                                        echo "Command failed: Target client for device {$targetDeviceId} not found among active connections.\n";
+                                        $from->send(json_encode(['type' => 'error', 'message' => 'Target device client not found']));
+                                    }
+                                } else {
+                                    echo "Command failed: Target device ID {$targetDeviceId} not registered.\n";
+                                    $from->send(json_encode(['type' => 'error', 'message' => 'Target device ID not registered']));
                                 }
-                            }
-                            if ($targetClient) {
-                                // Prepare the message to be sent to the ESP32
-                                // We'll take the original $data, remove targetDeviceId, and send the rest
-                                // This ensures 'type', 'command', 'key', 'value' etc. are all preserved.
-                                $messageToEsp32 = $data;
-                                unset($messageToEsp32['targetDeviceId']); // ESP32 doesn't need this field in its own message
-
-                                $messageJsonToEsp32 = json_encode($messageToEsp32);
-                                $targetClient->send($messageJsonToEsp32);
-                                echo "Relayed command to {$targetDeviceId} (conn {$targetClient->resourceId}): {$messageJsonToEsp32}\n";
                             } else {
-                                 echo "Command failed: Target client for device {$targetDeviceId} not found among active connections.\n";
-                                 $from->send(json_encode(['type' => 'error', 'message' => 'Target device client not found']));
+                                echo "Command failed: User {$userId} is not authorized to send commands to device {$targetDeviceId}.\n";
+                                $from->send(json_encode(['type' => 'error', 'message' => 'You are not authorized to control this device.']));
                             }
                         } else {
-                            echo "Command failed: Target device ID {$targetDeviceId} not registered.\n";
-                            $from->send(json_encode(['type' => 'error', 'message' => 'Target device ID not registered']));
+                            echo "Command failed: Could not identify user for connection {$from->resourceId}.\n";
+                            $from->send(json_encode(['type' => 'error', 'message' => 'Could not identify user.']));
                         }
                     }
                     break;

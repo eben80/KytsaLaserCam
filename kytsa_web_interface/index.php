@@ -1,3 +1,10 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header("Location: auth/login.php");
+    exit();
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,6 +15,7 @@
 </head>
 <body>
     <h1>Kytsa Laser Control</h1>
+    <p><a href="devices.php">Manage Devices</a> | <a href="auth/logout.php">Logout</a></p>
 
     <div>
         <label for="deviceSelect">Select Device:</label>
