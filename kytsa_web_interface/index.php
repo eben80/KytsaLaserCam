@@ -176,6 +176,17 @@ if (!isset($_SESSION['user_id'])) {
         </div>
     </div>
 
+    <?php if (isset($_SESSION['is_admin']) && $_SESSION['is_admin']): ?>
+    <div class="container" style="margin-top: 20px;">
+        <div class="controls">
+            <h3><button id="toggleDeviceHistoryBtn" class="toggle-btn">+/-</button> Device History</h3>
+            <div id="deviceHistoryContent" style="display: none;">
+                <!-- WiFi history will be loaded here -->
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <script src="script.js"></script>
 </body>
 </html>

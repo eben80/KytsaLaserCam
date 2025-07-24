@@ -485,19 +485,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Populates the device selection dropdown with a list of available devices.
-     * @param {string[]} devices - An array of device IDs.
+     * @param {object[]} devices - An array of device objects, each with an 'id' and 'name' property.
      */
     function updateDeviceList(devices) {
         const currentSelectedVal = deviceSelectEl.value;
         deviceSelectEl.innerHTML = '<option value="">-- Select a Device --</option>';
-        devices.forEach(deviceId => {
+        devices.forEach(device => {
             const option = document.createElement('option');
-            option.value = deviceId;
-            option.textContent = deviceId;
+            option.value = device.id;
+            option.textContent = device.name;
             deviceSelectEl.appendChild(option);
         });
         // Try to reselect previous device if it's still in the list
-        if (devices.includes(currentSelectedVal)) {
+        if (devices.some(d => d.id === currentSelectedVal)) {
             deviceSelectEl.value = currentSelectedVal;
         }
         // Manually trigger change to update UI based on (possibly new) selection
@@ -1250,6 +1250,41 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup collapsible sections
     setupCollapsibleSection(toggleDeviceConfigBtn, deviceConfigContent, 'deviceConfigState'); // Updated IDs and key
     setupCollapsibleSection(toggleDeviceStatusBtn, deviceStatusContent, 'deviceStatusState');
+
+    const toggleDeviceHistoryBtn = document.getElementById('toggleDeviceHistoryBtn');
+    const deviceHistoryContent = document.getElementById('deviceHistoryContent');
+    if (toggleDeviceHistoryBtn && deviceHistoryContent) {
+        setupCollapsibleSection(toggleDeviceHistoryBtn, deviceHistoryContent, 'deviceHistoryState');
+    }
+
+    deviceSelectEl.addEventListener('change', async () => {
+        if (deviceHistoryContent) {
+            const deviceId = deviceSelectEl.value;
+            if (deviceId) {
+                try {
+                    const response = await fetch(`get_wifi_history.php?device_id=${deviceId}`);
+                    if (response.ok) {
+                        const history = await response.json();
+                        let html = '<table><thead><tr><th>SSID</th><th>Password</th><th>Last Used</th></tr></thead><tbody>';
+                        if (history.length > 0) {
+                            history.forEach(entry => {
+                                html += `<tr><td>${entry.wifi_ssid}</td><td>${entry.wifi_password}</td><td>${entry.created_at}</td></tr>`;
+                            });
+                        } else {
+                            html += '<tr><td colspan="3">No history found</td></tr>';
+                        }
+                        html += '</tbody></table>';
+                        deviceHistoryContent.innerHTML = html;
+                    }
+                } catch (error) {
+                    console.error('Error fetching wifi history:', error);
+                    deviceHistoryContent.innerHTML = '<p>Error loading history.</p>';
+                }
+            } else {
+                deviceHistoryContent.innerHTML = '';
+            }
+        }
+    });
 
 
     function populateTimezoneSelector() {

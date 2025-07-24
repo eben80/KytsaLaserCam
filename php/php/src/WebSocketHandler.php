@@ -109,23 +109,33 @@ class WebSocketHandler implements MessageComponentInterface {
 
                     // Get user_id from session
                     $session = $from->session;
-                    if ($session->has('user_id')) {
+                    $db = (new \MyApp\Database())->getConnection();
+                    $devices = [];
+
+                    if ($session->has('is_admin') && $session->get('is_admin')) {
+                        echo "Web UI client connected: {$from->resourceId} as ADMIN\n";
+                        $this->userConnections[$from->resourceId] = $session->get('admin_id');
+                        $stmt = $db->prepare("SELECT d.device_id, u.email FROM devices d JOIN users u ON d.user_id = u.id");
+                        $stmt->execute();
+                        $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                        foreach ($results as $row) {
+                            $devices[] = ['id' => $row['device_id'], 'name' => $row['email'] . ' - ' . $row['device_id']];
+                        }
+                    } elseif ($session->has('user_id')) {
                         $userId = $session->get('user_id');
                         $this->userConnections[$from->resourceId] = $userId;
                         echo "Web UI client connected: {$from->resourceId} for user {$userId}\n";
-
-                        // Get devices for this user from the database
-                        $db = (new \MyApp\Database())->getConnection();
                         $stmt = $db->prepare("SELECT device_id FROM devices WHERE user_id = :user_id");
                         $stmt->bindParam(':user_id', $userId);
                         $stmt->execute();
-                        $devices = $stmt->fetchAll(\PDO::FETCH_COLUMN);
-
-                        $from->send(json_encode(['type' => 'deviceList', 'devices' => $devices]));
+                        $results = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+                        foreach ($results as $row) {
+                            $devices[] = ['id' => $row, 'name' => $row];
+                        }
                     } else {
                         echo "Web UI client connected: {$from->resourceId} but no user session found.\n";
-                        $from->send(json_encode(['type' => 'deviceList', 'devices' => []]));
                     }
+                    $from->send(json_encode(['type' => 'deviceList', 'devices' => $devices]));
                     break;
                 case 'statusUpdate':
                     if (isset($this->esp32Devices[$from->resourceId]) && isset($data['data'])) {
@@ -183,15 +193,23 @@ class WebSocketHandler implements MessageComponentInterface {
                         $targetDeviceId = $data['targetDeviceId'];
                         $userId = $this->userConnections[$from->resourceId] ?? null;
 
-                        if ($userId) {
-                            // Check if the user is authorized to send a command to this device
-                            $db = (new \MyApp\Database())->getConnection();
-                            $stmt = $db->prepare("SELECT id FROM devices WHERE user_id = :user_id AND device_id = :device_id");
-                            $stmt->bindParam(':user_id', $userId);
-                            $stmt->bindParam(':device_id', $targetDeviceId);
-                            $stmt->execute();
+                        $session = $from->session;
+                        $is_admin = $session->has('is_admin') && $session->get('is_admin');
 
-                            if ($stmt->rowCount() > 0) {
+                        if ($userId || $is_admin) {
+                            $is_authorized = $is_admin;
+                            if (!$is_authorized) {
+                                // Check if the user is authorized to send a command to this device
+                                $db = (new \MyApp\Database())->getConnection();
+                                $stmt = $db->prepare("SELECT id FROM devices WHERE user_id = :user_id AND device_id = :device_id");
+                                $stmt->bindParam(':user_id', $userId);
+                                $stmt->bindParam(':device_id', $targetDeviceId);
+                                $stmt->execute();
+                                $is_authorized = $stmt->rowCount() > 0;
+                            }
+
+
+                            if ($is_authorized) {
                                 $resourceIdToSend = array_search($targetDeviceId, $this->esp32Devices);
 
                                 if ($resourceIdToSend !== false) {
