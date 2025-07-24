@@ -4,19 +4,20 @@ use Ratchet\Http\HttpServer;
 use Ratchet\WebSocket\WsServer;
 use Ratchet\Session\SessionProvider;
 use MyApp\WebSocketHandler;
-use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
 use MyApp\Database;
+use MyApp\SessionHandler;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-$pdo = (new Database())->getConnection();
+$db = new Database();
+$sessionHandler = new SessionHandler($db);
+session_set_save_handler($sessionHandler, true);
 
 $server = IoServer::factory(
     new HttpServer(
         new WsServer(
             new SessionProvider(
-                new WebSocketHandler(),
-                new PdoSessionHandler($pdo, ['db_table' => 'sessions'])
+                new WebSocketHandler()
             )
         )
     ),
