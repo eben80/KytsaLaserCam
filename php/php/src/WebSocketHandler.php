@@ -109,7 +109,7 @@ class WebSocketHandler implements MessageComponentInterface {
                     }
 
                     // Get user_id from session
-                    $session = $from->session;
+                    $session = $from->_decorator->session;
                     $db = (new Database())->getConnection();
                     $devices = [];
 
@@ -205,7 +205,7 @@ class WebSocketHandler implements MessageComponentInterface {
                         $targetDeviceId = $data['targetDeviceId'];
                         $userId = $this->userConnections[$from->resourceId] ?? null;
 
-                        $session = $from->session;
+                        $session = $from->_decorator->session;
                         $is_admin = $session && $session->has('is_admin') && $session->get('is_admin');
 
                         if ($userId || $is_admin) {
