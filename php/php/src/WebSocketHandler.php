@@ -109,11 +109,11 @@ class WebSocketHandler implements MessageComponentInterface {
                     }
 
                     // Get user_id from session
-                    $session = $from->_decorator->session;
+                    $session = $from->session;
                     $db = (new Database())->getConnection();
                     $devices = [];
 
-                    if ($session && $session->has('is_admin') && $session->get('is_admin')) {
+                    if ($session->has('is_admin') && $session->get('is_admin')) {
                         echo "Web UI client connected: {$from->resourceId} as ADMIN\n";
                         $this->userConnections[$from->resourceId] = $session->get('admin_id');
                         $stmt = $db->prepare("SELECT d.device_id, u.email FROM devices d JOIN users u ON d.user_id = u.id");
@@ -122,7 +122,7 @@ class WebSocketHandler implements MessageComponentInterface {
                         foreach ($results as $row) {
                             $devices[] = ['id' => $row['device_id'], 'name' => $row['email'] . ' - ' . $row['device_id']];
                         }
-                    } elseif ($session && $session->has('user_id')) {
+                    } elseif ($session->has('user_id')) {
                         $userId = $session->get('user_id');
                         $this->userConnections[$from->resourceId] = $userId;
                         echo "Web UI client connected: {$from->resourceId} for user {$userId}\n";
@@ -205,8 +205,8 @@ class WebSocketHandler implements MessageComponentInterface {
                         $targetDeviceId = $data['targetDeviceId'];
                         $userId = $this->userConnections[$from->resourceId] ?? null;
 
-                        $session = $from->_decorator->session;
-                        $is_admin = $session && $session->has('is_admin') && $session->get('is_admin');
+                        $session = $from->session;
+                        $is_admin = $session->has('is_admin') && $session->get('is_admin');
 
                         if ($userId || $is_admin) {
                             $is_authorized = $is_admin;
