@@ -12,13 +12,14 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 $db = new Database();
 $sessionHandler = new SessionHandler($db);
 
+$wsServer = new WsServer(new WebSocketHandler());
+
 $server = IoServer::factory(
     new HttpServer(
-        new WsServer(
-            new SessionProvider(
-                new WebSocketHandler(),
-                $sessionHandler
-            )
+        new SessionProvider(
+            $wsServer,
+            $sessionHandler,
+            ['auto_start' => true]
         )
     ),
     8080
