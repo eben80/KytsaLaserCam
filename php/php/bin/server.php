@@ -13,12 +13,13 @@ $db = new Database();
 $sessionHandler = new SessionHandler($db);
 session_set_save_handler($sessionHandler, true);
 
+$wsServer = new WsServer(new WebSocketHandler());
+
 $server = IoServer::factory(
     new HttpServer(
-        new WsServer(
-            new SessionProvider(
-                new WebSocketHandler()
-            )
+        new SessionProvider(
+            $wsServer,
+            $sessionHandler
         )
     ),
     8080
